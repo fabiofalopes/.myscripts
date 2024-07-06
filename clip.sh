@@ -20,7 +20,7 @@ clip() {
         show_help
         return 0
     fi
-    
+
     if [ ! -f "$1" ]; then
         echo "Error: File '$1' not found."
         return 1
@@ -30,15 +30,23 @@ clip() {
     echo "Content of '$1' copied to clipboard."
 }
 
-
 # Main function
 main() {
-    if [ "$#" -gt 0 ] && [ "$1" == "-h" ]; then
+    if [ "$#" -eq 0 ]; then
+        echo "Error: No filename provided."
+        show_help
+        return 1
+    fi
+
+    if [ "$1" == "-h" ]; then
         show_help
         return 0
-    fi   
+    fi
+
+    clip "$@"
 }
 
 # Execute main function
-main "$@"
+# main "$@"i
+
 
