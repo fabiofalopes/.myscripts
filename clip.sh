@@ -47,6 +47,6 @@ main() {
 }
 
 # Execute main function
-# main "$@"i
+main "$@"
 
 
