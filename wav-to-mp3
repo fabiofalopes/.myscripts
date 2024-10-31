@@ -1,0 +1,66 @@
+wav_to_mp3() {
+    local input=""
+    local output=""
+    local is_directory=false
+
+    # Help function
+    show_help() {
+        echo "Usage: wav_to_mp3 <input> [-o <output>]"
+        echo "Convert WAV file(s) to MP3"
+        echo
+        echo "  <input>        Path to WAV file or directory containing WAV files"
+        echo "  -o <output>    Specify output file (for single file) or directory (for multiple files)"
+        echo "  -h             Show this help message"
+    }
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h) show_help; return 0 ;;
+            -o) output="$2"; shift 2 ;;
+            *) input="$1"; shift ;;
+        esac
+    done
+
+    # Check if input is provided
+    if [[ -z "$input" ]]; then
+        echo "Error: No input specified"
+        show_help
+        return 1
+    fi
+
+    # Check if input is a directory
+    if [[ -d "$input" ]]; then
+        is_directory=true
+    elif [[ ! -f "$input" ]]; then
+        echo "Error: Input file not found: $input"
+        return 1
+    fi
+
+    # Function to convert a single file
+    convert_file() {
+        local in_file="$1"
+        local out_file="$2"
+        ffmpeg -i "$in_file" -ar 44.1k -ac 2 -ab 128k "$out_file" -y 2>/dev/null
+        echo "Converted: $in_file -> $out_file"
+    }
+
+    # Convert files
+    if [[ "$is_directory" = true ]]; then
+        if [[ -z "$output" ]]; then
+            output="$input"
+        fi
+        mkdir -p "$output"
+        find "$input" -type f -name "*.wav" | while read -r file; do
+            filename=$(basename "$file")
+            convert_file "$file" "${output}/${filename%.wav}.mp3"
+        done
+    else
+        if [[ -z "$output" ]]; then
+            output="${input%.wav}.mp3"
+        fi
+        convert_file "$input" "$output"
+    fi
+
+    echo "Conversion complete."
+}
