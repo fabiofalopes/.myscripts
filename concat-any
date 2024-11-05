@@ -1,0 +1,100 @@
+#!/bin/bash
+
+# Function to display usage information
+usage() {
+  echo "Usge: $0 [-r] [-o <output_file>] <file_extension> <input_dir>"
+  echo "Options:"
+  echo "  -r                  Recursively search through subdirectories"
+  echo "  -o <output_file>    Specify an output file; otherwise, output goes to the terminal"
+  echo "Arguments:"
+  echo "  <file_extension>    The file extension to search for (e.g., py, md)"
+  echo "  <input_dir>         The directory to search within"
+  echo "Examples:"
+  echo "  $0 py /dir/target"
+  echo "  $0 -r -o output.md py /dir/target"
+  exit 1
+}
+
+# Default values
+RECURSIVE=false
+OUTPUT_FILE=""
+
+# Parse options
+while getopts "ro:" opt; do
+  case $opt in
+    r)
+      RECURSIVE=true
+      ;;
+    o)
+      OUTPUT_FILE="$OPTARG"
+      ;;
+    *)
+      usage
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
+# Check if file extension and input directory are provided
+if [ $# -ne 2 ]; then
+  usage
+fi
+
+FILE_EXT="$1"
+INPUT_DIR="$2"
+
+# Validate the input directory
+if [ ! -d "$INPUT_DIR" ]; then
+  echo "Error: $INPUT_DIR is not a directory."
+  exit 1
+fi
+
+# Validate the file extension format (no leading dot)
+if [[ "$FILE_EXT" == .* ]]; then
+  echo "Error: File extension should not include a dot. Use 'py' instead of '.py'."
+  exit 1
+fi
+
+# Find files with the specified extension
+if $RECURSIVE; then
+  FILES=$(find "$INPUT_DIR" -type f -name "*.$FILE_EXT")
+else
+  FILES=$(find "$INPUT_DIR" -maxdepth 1 -type f -name "*.$FILE_EXT")
+fi
+
+# Check if OUTPUT_FILE is set; if not, print to terminal
+if [ -n "$OUTPUT_FILE" ]; then
+  # Ensure a unique output file if -o is specified
+  if [ -f "$OUTPUT_FILE" ]; then
+    echo "Error: $OUTPUT_FILE already exists. Choose a different name."
+    exit 1
+  fi
+
+  # Initialize the output file as empty
+  > "$OUTPUT_FILE"
+
+  # Write content to the output file
+  for file in $FILES; do
+    if [ -f "$file" ]; then
+      FILE_NAME=$(basename "$file" | sed 's/\.[^.]*$//')
+      echo "### $FILE_NAME" >> "$OUTPUT_FILE"
+      echo "---" >> "$OUTPUT_FILE"
+      cat "$file" >> "$OUTPUT_FILE"
+      echo "---" >> "$OUTPUT_FILE"
+    fi
+  done
+  echo "Concatenation complete. Output file: $OUTPUT_FILE"
+
+else
+  # Print to terminal if no -o flag
+  for file in $FILES; do
+    if [ -f "$file" ]; then
+      FILE_NAME=$(basename "$file" | sed 's/\.[^.]*$//')
+      echo "### $FILE_NAME"
+      echo "---"
+      cat "$file"
+      echo "---"
+    fi
+  done
+fi
+
