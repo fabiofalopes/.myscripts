@@ -9,49 +9,40 @@
 # List all sessions
 tmux ls
 
-# Attach to existing session
+# Attach to existing session (two equivalent methods)
+tmux a -t main
 tmux attach -t main
+
+# Detach current session
+# Using key binding: Ctrl-b d
 
 # Kill session (if you need to reset everything)
 tmux kill-session -t main
 ```
 
-## Current Session Layout
-1. Window 1 ('system'): Three-pane layout
-   - Left: neofetch
-   - Top-right: htop
-   - Bottom-right: system monitoring stats
-
-2. Window 2 ('voice-note'):
-   - Directory: ~/projetos/hub/voice_note/
-   - Auto-activates Python virtual environment
-
-3. Window 3 ('projetos'):
-   - Directory: ~/projetos/
-
 ## Default Key Bindings
-(Using `C-a` as prefix)
+(Using `C-b` as prefix)
 
 ### Session Management
-- `C-a d` - Detach from session
-- `C-a s` - List sessions
-- `C-a $` - Rename session
+- `C-b d` - Detach from session
+- `C-b s` - List sessions
+- `C-b $` - Rename session
 
 ### Window Management
-- `C-a c` - Create new window
-- `C-a ,` - Rename window
-- `C-a n` - Next window
-- `C-a p` - Previous window
-- `C-a w` - List windows
-- `C-a &` - Kill window
+- `C-b c` - Create new window
+- `C-b ,` - Rename window
+- `C-b n` - Next window
+- `C-b p` - Previous window
+- `C-b w` - List windows
+- `C-b &` - Kill window
 
 ### Pane Management
-- `C-a %` - Split pane vertically
-- `C-a "` - Split pane horizontally
-- `C-a o` - Switch to next pane
-- `C-a q` - Show pane numbers
-- `C-a x` - Kill pane
-- `C-a z` - Toggle pane zoom
+- `C-b %` - Split pane vertically
+- `C-b "` - Split pane horizontally
+- `C-b o` - Switch to next pane
+- `C-b q` - Show pane numbers
+- `C-b x` - Kill pane
+- `C-b z` - Toggle pane zoom
 
 ## Plugin Features
 - Session persistence across reboots (tmux-resurrect, tmux-continuum)
