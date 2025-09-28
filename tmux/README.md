@@ -1,39 +1,75 @@
-# Personal Tmux Configuration
+# Portable tmux Configuration
 
-## Directory Structure
-- `~/.myscripts/tmux/` - Main configuration directory
-  - `init.sh` - Main session initialization script
-  - `tmux.conf` -> `~/.tmux.conf` - Tmux configuration file
-- `~/.tmux/` - Tmux plugin directory (managed by TPM)
-  - `plugins/` - Contains installed plugins
-  - `resurrect/` - Session backup data
+Cross-platform tmux setup with session persistence and clean styling. No bullshit, just works.
 
-## Session: main
-The default session contains:
-1. System monitoring (window 1)
-   - neofetch
-   - htop
-   - system stats
-2. Voice Note project (window 2)
-   - Automatically loads existing venv if present
-3. Config directories (window 3)
-   - Four-way split for different config locations
+## Philosophy
 
-## Plugin Management
-- TPM (Tmux Plugin Manager) handles plugins
-- Plugins are defined in tmux.conf
-- Install plugins: `prefix + I`
-- Update plugins: `prefix + U`
+- **Portable**: Same config works on macOS and Linux
+- **Non-invasive**: Symlinks files, doesn't mess with your home directory
+- **Persistent**: Sessions survive reboots
+- **Clean**: Minimal, tasteful green/gray color scheme
 
-## Session Management
-- Sessions auto-restore after reboot (tmux-resurrect)
-- Save session: `prefix + Ctrl-s`
-- Restore session: `prefix + Ctrl-r`
+## Quick Start
 
-## Common Issues
-1. After reboot:
-   - Environment might need reinitialization
-   - Solution: Detach and reattach or restart session
-2. Virtual environments:
-   - Only sources existing venvs, never creates them
-   - Located in project directories as `.venv`
+```bash
+# 1. Link configuration files
+bash scripts/link.sh
+
+# 2. Install plugins (start tmux first)
+tmux
+# Then press: Ctrl-b + I
+
+# 3. Done
+```
+
+## What You Get
+
+- **Window switching**: `Ctrl-b + 1/2/3/4` switches windows
+- **Mouse support**: Click, drag, scroll all work
+- **Session persistence**: Sessions restore after reboot
+- **Clean colors**: Green accents, gray backgrounds, no ugly blue
+- **Cross-platform**: Works identically on macOS and Linux
+
+## Files Created
+
+```
+~/.tmux.conf          -> tmux/tmux/tmux.conf
+~/.tmux/mac.conf      -> tmux/tmux/mac.conf  
+~/.tmux/linux.conf    -> tmux/tmux/linux.conf
+```
+
+## Customization
+
+Create `~/.tmux.local.conf` for personal settings:
+
+```bash
+# Example: Change prefix to Ctrl-a
+set -g prefix C-a
+unbind C-b
+bind C-a send-prefix
+```
+
+## Management
+
+```bash
+# Test configuration
+bash scripts/test.sh
+
+# Update plugins and config
+bash scripts/update.sh
+
+# Remove everything (restores backups)
+bash scripts/uninstall.sh
+
+# System diagnostics
+bash scripts/tmux_audit.sh
+```
+
+## Troubleshooting
+
+- **Plugins missing**: Press `Ctrl-b + I` in tmux
+- **Colors wrong**: Reload with `Ctrl-b + r` 
+- **Keys not working**: Check `tmux list-keys`
+- **More help**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+
+That's it. No complexity, no surprises.
