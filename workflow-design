@@ -1,0 +1,24 @@
+#!/bin/bash
+# Quick helper script to use workflow-architect pattern
+# 
+# Usage:
+#   workflow-design "I want to create a workflow that..."
+#   workflow-design  # Interactive mode - will prompt for input
+
+if [ $# -eq 0 ]; then
+    echo -e "\033[0;36m📐 Workflow Architect\033[0m"
+    echo -e "\033[2mDescribe the workflow you want to create:\033[0m\n"
+    echo -n "> "
+    read -r WORKFLOW_IDEA
+    echo ""
+else
+    WORKFLOW_IDEA="$*"
+fi
+
+if [ -z "$WORKFLOW_IDEA" ]; then
+    echo -e "\033[0;31m✗\033[0m No workflow idea provided"
+    exit 1
+fi
+
+echo -e "\033[0;34m▶\033[0m Analyzing workflow design...\n"
+echo "$WORKFLOW_IDEA" | fabric -p workflow-architect

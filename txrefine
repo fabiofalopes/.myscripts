@@ -1,0 +1,153 @@
+#!/bin/bash
+# Transcription Refinement Workflow
+# Takes raw transcription from stdin and refines it using fabric patterns
+#
+# Usage:
+#   voicenote | txrefine              # Pipe from voicenote
+#   cat transcript.txt | txrefine     # Pipe from file
+#   xclip -o | txrefine               # Pipe from clipboard
+
+set -e
+set -o pipefail
+
+# Colors
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+# Helper function for section headers
+print_section() {
+    echo -e "\n${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${BLUE}$1${NC}"
+    echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+}
+
+# Helper function for status messages
+print_status() {
+    echo -e "${CYAN}▶${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}✗${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+echo -e "${BOLD}${BLUE}╔════════════════════════════════════════╗${NC}"
+echo -e "${BOLD}${BLUE}║  Transcription Refinement Workflow    ║${NC}"
+echo -e "${BOLD}${BLUE}╚════════════════════════════════════════╝${NC}\n"
+
+# Step 1: Get input from stdin (MANDATORY)
+if [ -p /dev/stdin ]; then
+    print_status "Reading from stdin..."
+    RAW_TRANSCRIPTION=$(cat)
+else
+    print_error "No input provided. This script requires piped input."
+    echo ""
+    echo -e "${YELLOW}Usage examples:${NC}"
+    echo -e "  ${DIM}voicenote | txrefine${NC}"
+    echo -e "  ${DIM}cat transcript.txt | txrefine${NC}"
+    echo -e "  ${DIM}xclip -o | txrefine${NC}"
+    echo -e "  ${DIM}echo \"your text\" | txrefine${NC}"
+    echo ""
+    exit 1
+fi
+
+# Validate input
+if [ -z "$RAW_TRANSCRIPTION" ]; then
+    print_error "Empty input received"
+    exit 1
+fi
+
+print_success "Captured ${#RAW_TRANSCRIPTION} characters"
+
+# Display first few lines of input
+echo -e "\n${DIM}Preview of raw transcription:${NC}"
+echo -e "${DIM}$(echo "$RAW_TRANSCRIPTION" | head -c 200)...${NC}\n"
+
+# Step 2: Run transcript analyzer
+print_section "STAGE 1: Terminology Analysis"
+
+print_status "Running transcript-analyzer..."
+echo -e "${DIM}Command: fabric -p transcript-analyzer${NC}\n"
+
+# Use a temporary file to capture both stdout and track progress
+TEMP_ANALYZER=$(mktemp)
+trap "rm -f $TEMP_ANALYZER" EXIT
+
+echo "$RAW_TRANSCRIPTION" | fabric -p transcript-analyzer 2>&1 | tee "$TEMP_ANALYZER"
+ANALYZER_EXIT=${PIPESTATUS[1]}
+
+WORD_LIST=$(cat "$TEMP_ANALYZER")
+
+echo ""
+if [ $ANALYZER_EXIT -ne 0 ]; then
+    print_warning "Analyzer exited with code $ANALYZER_EXIT, continuing without word list"
+    WORD_LIST="No specific terms identified."
+elif [ -z "$WORD_LIST" ]; then
+    print_warning "Analyzer produced no output"
+    WORD_LIST="No specific terms identified."
+else
+    print_success "Analysis complete"
+fi
+
+# Step 3: Run transcript refiner
+print_section "STAGE 2: Transcription Refinement"
+
+print_status "Combining raw transcription + analysis results..."
+REFINER_INPUT="**Raw Transcription:**
+$RAW_TRANSCRIPTION
+
+**Word List:**
+$WORD_LIST"
+
+echo -e "${DIM}Input size: ${#REFINER_INPUT} characters${NC}\n"
+
+print_status "Running transcript-refiner..."
+echo -e "${DIM}Command: fabric -p transcript-refiner${NC}\n"
+
+# Use a temporary file to capture output
+TEMP_REFINER=$(mktemp)
+trap "rm -f $TEMP_ANALYZER $TEMP_REFINER" EXIT
+
+echo "$REFINER_INPUT" | fabric -p transcript-refiner 2>&1 | tee "$TEMP_REFINER"
+REFINER_EXIT=${PIPESTATUS[1]}
+
+REFINED_TRANSCRIPTION=$(cat "$TEMP_REFINER")
+
+echo ""
+if [ $REFINER_EXIT -ne 0 ]; then
+    print_error "Refinement failed (exit code: $REFINER_EXIT)"
+    exit 1
+fi
+
+if [ -z "$REFINED_TRANSCRIPTION" ]; then
+    print_error "Refinement produced no output"
+    exit 1
+fi
+
+print_success "Refinement complete"
+
+# Step 4: Display final result
+print_section "FINAL RESULT"
+
+echo "$REFINED_TRANSCRIPTION"
+
+# Step 5: Copy to clipboard
+echo ""
+print_status "Copying to clipboard..."
+echo "$REFINED_TRANSCRIPTION" | xclip -selection clipboard 2>/dev/null
+print_success "Refined transcription copied to clipboard!"
+
+echo -e "\n${BOLD}${GREEN}✨ Workflow complete!${NC}\n"
