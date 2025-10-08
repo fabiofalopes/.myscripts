@@ -6,6 +6,197 @@ This directory contains **custom AI prompts (patterns) for the fabric framework*
 
 These patterns are designed to be **orchestrated by bash scripts** that pipe data through multiple AI agents to create complex workflows.
 
+## Vision & OCR Patterns
+
+### image-text-extraction
+**Purpose**: Extract all visible text from images exactly as it appears, with focus on technical identifiers.
+
+**Use when**: You need to extract text from device labels, signs, technical documentation, or any image with text.
+
+**Input**: Image (via `fabric -a <image>`)
+
+**Output**: Clean Markdown with structured text extraction
+
+**Best for**:
+- Device labels (MAC addresses, serial numbers, model numbers)
+- Room identification tags
+- Technical documentation
+- Signs and printed materials
+- Configuration screens
+
+**Example**:
+```bash
+fabric -a device_photo.jpg -p image-text-extraction
+fabric -a "https://example.com/label.jpg" -p image-text-extraction -o output.md
+```
+
+---
+
+### expert-ocr-engine
+**Purpose**: High-accuracy OCR transcription with focus on technical identifiers and structured output.
+
+**Use when**: You need precise text extraction with minimal errors, especially for technical content.
+
+**Input**: Image (via `fabric -a <image>`)
+
+**Output**: Markdown with section headers and grouped related text
+
+**Best for**:
+- Serial numbers and technical IDs
+- Engraved or printed labels
+- MAC addresses, IP addresses
+- FortiCloud IDs and device identifiers
+- Any technical text requiring high accuracy
+
+**Example**:
+```bash
+fabric -a network_device.jpg -p expert-ocr-engine
+fabric -a document.png -p expert-ocr-engine --copy
+```
+
+---
+
+### analyze-image-json
+**Purpose**: Comprehensive image analysis with structured JSON output including OCR, object detection, and metadata.
+
+**Use when**: You need programmatic access to image analysis data or want structured output for further processing.
+
+**Input**: Image (via `fabric -a <image>`)
+
+**Output**: Valid JSON with multiple fields:
+- `image_type`: Category of the image
+- `description`: Overall description
+- `objects`: List of identified objects
+- `text_content`: Extracted text with language detection
+- `technical_details`: MAC addresses, serial numbers, IPs, etc.
+- `layout`: Composition and orientation info
+- `colors`: Dominant and accent colors
+- `quality`: Resolution, clarity, lighting assessment
+- `context`: Environment and purpose categorization
+- `metadata`: Confidence score, notes, detected features
+
+**Best for**:
+- Asset management and inventory systems
+- Automated documentation workflows
+- Data extraction pipelines
+- Programmatic image processing
+- Multi-field analysis requirements
+
+**Example**:
+```bash
+fabric -a asset.jpg -p analyze-image-json
+fabric -a device.jpg -p analyze-image-json -o data.json
+fabric -a photo.jpg -p analyze-image-json | jq .technical_details
+```
+
+---
+
+### ultra-ocr-engine
+**Purpose**: Maximum-effort OCR extraction with aggressive prompt engineering for degraded, low-resolution, or challenging images.
+
+**Use when**: Standard OCR patterns fail on low-quality images, compressed documents, or when you need to extract text from difficult visual conditions.
+
+**Input**: Image (via `fabric -a <image>`)
+
+**Output**: Structured Markdown with:
+- Full transcription with preserved structure
+- Technical identifiers categorized
+- Low-confidence annotations with uncertainty flags
+- Structural metadata
+- Confidence ratings for uncertain text
+
+**Best for**:
+- Low-resolution full-page documents
+- Compressed or degraded images
+- Faded or poor-contrast text
+- Small/micro-text extraction
+- Images with noise or artifacts
+- Maximum text recovery scenarios
+
+**Special features**:
+- Multi-stage processing (visual analysis → extraction → reconstruction → confidence weighting)
+- Aggressive contextual inference
+- Pattern completion for partial characters
+- Explicit low-resolution mode
+- Sub-pixel inference techniques
+- Transparent uncertainty flagging
+
+**Example**:
+```bash
+fabric -a low_res_document.jpg -p ultra-ocr-engine
+fabric -a degraded_photo.png -p ultra-ocr-engine --stream
+fabric -a compressed_scan.jpg -p ultra-ocr-engine -o output.md
+```
+
+**Technical note**: Designed to address the "low-res full page problem" where vision models fail to extract text from full pages but succeed on cropped regions.
+
+---
+
+### multi-scale-ocr
+**Purpose**: Hierarchical multi-scale text extraction using systematic zoom-level processing to overcome resolution limitations.
+
+**Use when**: Processing full-page low-resolution documents where standard patterns miss text, especially structured documents with varying text sizes.
+
+**Input**: Image (via `fabric -a <image>`)
+
+**Output**: Comprehensive structured report with:
+- Document overview and quality assessment
+- Multi-scale extraction results (MACRO/MESO/MICRO/SUB-PIXEL levels)
+- Integrated full transcription
+- Extraction quality report with coverage and confidence metrics
+- Problem area identification
+- Re-capture recommendations
+
+**Best for**:
+- Full-page low-resolution documents
+- Documents with mixed text sizes (headers, body, footnotes)
+- Structured documents (forms, technical manuals)
+- Multi-region documents requiring systematic processing
+- Quality assessment and gap analysis
+
+**Processing levels**:
+1. **MACRO**: Overall structure, titles, headers, large text
+2. **MESO**: Body paragraphs, lists, tables, medium text
+3. **MICRO**: Fine details, codes, serial numbers, small print
+4. **SUB-PIXEL**: Inference zone for barely visible text
+
+**Special features**:
+- Hierarchical context propagation (large text informs small text interpretation)
+- Format-aware pattern matching (MAC addresses, IPs, dates, etc.)
+- Linguistic probability for unclear characters
+- Spatial reasoning based on document layout
+- Virtual sectioning for full pages
+- Multi-hypothesis generation for ambiguous text
+
+**Example**:
+```bash
+fabric -a full_page_lowres.jpg -p multi-scale-ocr
+fabric -a technical_manual.png -p multi-scale-ocr -o analysis.md
+fabric -a form_scan.jpg -p multi-scale-ocr --stream
+```
+
+**Technical note**: Specifically designed to solve the resolution-dependent OCR failure problem by processing the image at multiple conceptual "zoom levels" simultaneously.
+
+---
+
+## OCR Pattern Comparison
+
+| Pattern | Best For | Resolution Handling | Output Format | Speed |
+|---------|----------|---------------------|---------------|-------|
+| **image-text-extraction** | Clean images, simple extraction | Good → Medium | Clean Markdown | Fast |
+| **expert-ocr-engine** | Technical IDs, high accuracy needed | Good → Medium | Structured Markdown | Fast |
+| **analyze-image-json** | Programmatic use, multi-field data | Good → Medium | JSON | Medium |
+| **ultra-ocr-engine** | Degraded/low-res, maximum effort | Medium → Poor | Detailed Markdown + Confidence | Slow |
+| **multi-scale-ocr** | Full page low-res, structured docs | Medium → Poor | Comprehensive Report | Slow |
+
+**Recommendation**:
+- Start with `image-text-extraction` or `expert-ocr-engine` for normal images
+- Use `ultra-ocr-engine` when they fail or for known poor-quality images
+- Use `multi-scale-ocr` for full-page low-resolution documents
+- Use `analyze-image-json` when you need structured programmatic output
+
+---
+
 ## Search Optimization Patterns
 
 ### deep_search_optimizer
