@@ -8,11 +8,23 @@
 set -euo pipefail
 
 # ------------------------
+# Detect fabric command
+# ------------------------
+if command -v fabric-ai &> /dev/null; then
+    FABRIC_CMD="fabric-ai"
+elif command -v fabric &> /dev/null; then
+    FABRIC_CMD="fabric"
+else
+    echo "Error: Neither 'fabric' nor 'fabric-ai' command found."
+    echo "Please install fabric: https://github.com/danielmiessler/fabric"
+    exit 1
+fi
+
+# ------------------------
 # Configuration
 # ------------------------
 PROJECT_DIR="$HOME/Documents/projetos/hub/voice_note"
 TRANSCRIPTS_DIR="$PROJECT_DIR/transcripts"
-FABRIC_CMD="/opt/homebrew/bin/fabric-ai"
 
 # ------------------------
 # Parse optional text input

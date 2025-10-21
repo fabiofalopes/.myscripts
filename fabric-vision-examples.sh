@@ -3,6 +3,17 @@
 # Fabric Vision Usage Examples
 # Demonstrates different ways to use fabric with images
 
+# Detect fabric command
+if command -v fabric-ai &> /dev/null; then
+    FABRIC_CMD="fabric-ai"
+elif command -v fabric &> /dev/null; then
+    FABRIC_CMD="fabric"
+else
+    echo "Error: Neither 'fabric' nor 'fabric-ai' command found."
+    echo "Please install fabric: https://github.com/danielmiessler/fabric"
+    exit 1
+fi
+
 # Colors for output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -40,40 +51,40 @@ echo ""
 
 # Example 1: Simple text extraction
 echo -e "${GREEN}[Example 1] Simple Text Extraction${RESET}"
-echo -e "${YELLOW}Command:${RESET} fabric -a \"$IMAGE\" -p image-text-extraction"
+echo -e "${YELLOW}Command:${RESET} $FABRIC_CMD -a \"$IMAGE\" -p image-text-extraction"
 echo ""
 read -p "Press Enter to run... "
-fabric -a "$IMAGE" -p image-text-extraction
+$FABRIC_CMD -a "$IMAGE" -p image-text-extraction
 echo ""
 echo "─────────────────────────────────────────────────────"
 echo ""
 
 # Example 2: Expert OCR
 echo -e "${GREEN}[Example 2] Expert OCR Engine${RESET}"
-echo -e "${YELLOW}Command:${RESET} fabric -a \"$IMAGE\" -p expert-ocr-engine"
+echo -e "${YELLOW}Command:${RESET} $FABRIC_CMD -a \"$IMAGE\" -p expert-ocr-engine"
 echo ""
 read -p "Press Enter to run... "
-fabric -a "$IMAGE" -p expert-ocr-engine
+$FABRIC_CMD -a "$IMAGE" -p expert-ocr-engine
 echo ""
 echo "─────────────────────────────────────────────────────"
 echo ""
 
 # Example 3: JSON output
 echo -e "${GREEN}[Example 3] Structured JSON Analysis${RESET}"
-echo -e "${YELLOW}Command:${RESET} fabric -a \"$IMAGE\" -p analyze-image-json"
+echo -e "${YELLOW}Command:${RESET} $FABRIC_CMD -a \"$IMAGE\" -p analyze-image-json"
 echo ""
 read -p "Press Enter to run... "
-fabric -a "$IMAGE" -p analyze-image-json
+$FABRIC_CMD -a "$IMAGE" -p analyze-image-json
 echo ""
 echo "─────────────────────────────────────────────────────"
 echo ""
 
 # Example 4: With streaming
 echo -e "${GREEN}[Example 4] Streaming Response${RESET}"
-echo -e "${YELLOW}Command:${RESET} fabric -a \"$IMAGE\" -p image-text-extraction --stream"
+echo -e "${YELLOW}Command:${RESET} $FABRIC_CMD -a \"$IMAGE\" -p image-text-extraction --stream"
 echo ""
 read -p "Press Enter to run... "
-fabric -a "$IMAGE" -p image-text-extraction --stream
+$FABRIC_CMD -a "$IMAGE" -p image-text-extraction --stream
 echo ""
 echo "─────────────────────────────────────────────────────"
 echo ""
@@ -81,10 +92,10 @@ echo ""
 # Example 5: Save to file
 OUTPUT_FILE="/tmp/fabric_vision_output_$(date +%s).md"
 echo -e "${GREEN}[Example 5] Save Output to File${RESET}"
-echo -e "${YELLOW}Command:${RESET} fabric -a \"$IMAGE\" -p image-text-extraction -o \"$OUTPUT_FILE\""
+echo -e "${YELLOW}Command:${RESET} $FABRIC_CMD -a \"$IMAGE\" -p image-text-extraction -o \"$OUTPUT_FILE\""
 echo ""
 read -p "Press Enter to run... "
-fabric -a "$IMAGE" -p image-text-extraction -o "$OUTPUT_FILE"
+$FABRIC_CMD -a "$IMAGE" -p image-text-extraction -o "$OUTPUT_FILE"
 echo ""
 echo -e "${BLUE}Output saved to: $OUTPUT_FILE${RESET}"
 cat "$OUTPUT_FILE"
@@ -94,10 +105,10 @@ echo ""
 
 # Example 6: Copy to clipboard
 echo -e "${GREEN}[Example 6] Copy to Clipboard${RESET}"
-echo -e "${YELLOW}Command:${RESET} fabric -a \"$IMAGE\" -p image-text-extraction --copy"
+echo -e "${YELLOW}Command:${RESET} $FABRIC_CMD -a \"$IMAGE\" -p image-text-extraction --copy"
 echo ""
 read -p "Press Enter to run... "
-fabric -a "$IMAGE" -p image-text-extraction --copy
+$FABRIC_CMD -a "$IMAGE" -p image-text-extraction --copy
 echo ""
 echo -e "${BLUE}Output copied to clipboard!${RESET}"
 echo ""
@@ -106,21 +117,21 @@ echo ""
 
 # Example 7: With specific model (if you have OpenAI configured)
 echo -e "${GREEN}[Example 7] Using Specific Vision Model${RESET}"
-echo -e "${YELLOW}Command:${RESET} fabric -a \"$IMAGE\" -p image-text-extraction -m gpt-4o"
+echo -e "${YELLOW}Command:${RESET} $FABRIC_CMD -a \"$IMAGE\" -p image-text-extraction -m gpt-4o"
 echo ""
 echo -e "${YELLOW}Note: This requires OpenAI API key configured${RESET}"
 read -p "Press Enter to try (or Ctrl+C to skip)... "
-fabric -a "$IMAGE" -p image-text-extraction -m gpt-4o 2>/dev/null || echo -e "${YELLOW}Skipped (model not available)${RESET}"
+$FABRIC_CMD -a "$IMAGE" -p image-text-extraction -m gpt-4o 2>/dev/null || echo -e "${YELLOW}Skipped (model not available)${RESET}"
 echo ""
 echo "─────────────────────────────────────────────────────"
 echo ""
 
 # Example 8: Custom prompt with image
 echo -e "${GREEN}[Example 8] Custom Prompt with Image${RESET}"
-echo -e "${YELLOW}Command:${RESET} echo 'List all technical identifiers in this image' | fabric -a \"$IMAGE\""
+echo -e "${YELLOW}Command:${RESET} echo 'List all technical identifiers in this image' | $FABRIC_CMD -a \"$IMAGE\""
 echo ""
 read -p "Press Enter to run... "
-echo 'List all technical identifiers in this image' | fabric -a "$IMAGE"
+echo 'List all technical identifiers in this image' | $FABRIC_CMD -a "$IMAGE"
 echo ""
 echo "─────────────────────────────────────────────────────"
 echo ""

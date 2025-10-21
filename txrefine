@@ -10,6 +10,19 @@
 set -e
 set -o pipefail
 
+# Detect which fabric command is available
+# macOS (brew): fabric-ai
+# Linux (standard install): fabric
+if command -v fabric-ai &> /dev/null; then
+    FABRIC_CMD="fabric-ai"
+elif command -v fabric &> /dev/null; then
+    FABRIC_CMD="fabric"
+else
+    echo "Error: Neither 'fabric' nor 'fabric-ai' command found."
+    echo "Please install fabric: https://github.com/danielmiessler/fabric"
+    exit 1
+fi
+
 # Colors
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -80,13 +93,13 @@ echo -e "${DIM}$(echo "$RAW_TRANSCRIPTION" | head -c 200)...${NC}\n"
 print_section "STAGE 1: Terminology Analysis"
 
 print_status "Running transcript-analyzer..."
-echo -e "${DIM}Command: fabric -p transcript-analyzer${NC}\n"
+echo -e "${DIM}Command: $FABRIC_CMD -p transcript-analyzer${NC}\n"
 
 # Use a temporary file to capture both stdout and track progress
 TEMP_ANALYZER=$(mktemp)
 trap "rm -f $TEMP_ANALYZER" EXIT
 
-echo "$RAW_TRANSCRIPTION" | fabric -p transcript-analyzer 2>&1 | tee "$TEMP_ANALYZER"
+echo "$RAW_TRANSCRIPTION" | $FABRIC_CMD -p transcript-analyzer 2>&1 | tee "$TEMP_ANALYZER"
 ANALYZER_EXIT=${PIPESTATUS[1]}
 
 WORD_LIST=$(cat "$TEMP_ANALYZER")
@@ -115,13 +128,13 @@ $WORD_LIST"
 echo -e "${DIM}Input size: ${#REFINER_INPUT} characters${NC}\n"
 
 print_status "Running transcript-refiner..."
-echo -e "${DIM}Command: fabric -p transcript-refiner${NC}\n"
+echo -e "${DIM}Command: $FABRIC_CMD -p transcript-refiner${NC}\n"
 
 # Use a temporary file to capture output
 TEMP_REFINER=$(mktemp)
 trap "rm -f $TEMP_ANALYZER $TEMP_REFINER" EXIT
 
-echo "$REFINER_INPUT" | fabric -p transcript-refiner 2>&1 | tee "$TEMP_REFINER"
+echo "$REFINER_INPUT" | $FABRIC_CMD -p transcript-refiner 2>&1 | tee "$TEMP_REFINER"
 REFINER_EXIT=${PIPESTATUS[1]}
 
 REFINED_TRANSCRIPTION=$(cat "$TEMP_REFINER")
@@ -147,7 +160,16 @@ echo "$REFINED_TRANSCRIPTION"
 # Step 5: Copy to clipboard
 echo ""
 print_status "Copying to clipboard..."
-echo "$REFINED_TRANSCRIPTION" | xclip -selection clipboard 2>/dev/null
-print_success "Refined transcription copied to clipboard!"
+
+# Detect clipboard command (macOS vs Linux)
+if command -v pbcopy &> /dev/null; then
+    echo "$REFINED_TRANSCRIPTION" | pbcopy
+    print_success "Refined transcription copied to clipboard!"
+elif command -v xclip &> /dev/null; then
+    echo "$REFINED_TRANSCRIPTION" | xclip -selection clipboard
+    print_success "Refined transcription copied to clipboard!"
+else
+    print_warning "No clipboard utility found (pbcopy/xclip). Skipping clipboard copy."
+fi
 
 echo -e "\n${BOLD}${GREEN}✨ Workflow complete!${NC}\n"

@@ -5,6 +5,17 @@
 
 set -e
 
+# Detect fabric command
+if command -v fabric-ai &> /dev/null; then
+    FABRIC_CMD="fabric-ai"
+elif command -v fabric &> /dev/null; then
+    FABRIC_CMD="fabric"
+else
+    echo "Error: Neither 'fabric' nor 'fabric-ai' command found."
+    echo "Please install fabric: https://github.com/danielmiessler/fabric"
+    exit 1
+fi
+
 COLOR_GREEN='\033[0;32m'
 COLOR_YELLOW='\033[1;33m'
 COLOR_RED='\033[0;31m'
@@ -18,9 +29,9 @@ echo ""
 
 # Test 1: Check Fabric Installation
 echo -e "${COLOR_YELLOW}[1/8] Checking Fabric installation...${COLOR_RESET}"
-if command -v fabric &> /dev/null; then
-    FABRIC_VERSION=$(fabric --version 2>/dev/null || echo "unknown")
-    echo -e "${COLOR_GREEN}✓ Fabric is installed (version: $FABRIC_VERSION)${COLOR_RESET}"
+if command -v $FABRIC_CMD &> /dev/null; then
+    FABRIC_VERSION=$($FABRIC_CMD --version 2>/dev/null || echo "unknown")
+    echo -e "${COLOR_GREEN}✓ Fabric is installed ($FABRIC_CMD, version: $FABRIC_VERSION)${COLOR_RESET}"
 else
     echo -e "${COLOR_RED}✗ Fabric is not installed${COLOR_RESET}"
     exit 1
@@ -29,9 +40,9 @@ echo ""
 
 # Test 2: Check Attachment Flag
 echo -e "${COLOR_YELLOW}[2/8] Verifying --attachment flag support...${COLOR_RESET}"
-if fabric --help | grep -q "attachment"; then
+if $FABRIC_CMD --help | grep -q "attachment"; then
     echo -e "${COLOR_GREEN}✓ --attachment flag is available${COLOR_RESET}"
-    fabric --help | grep -A 1 "attachment"
+    $FABRIC_CMD --help | grep -A 1 "attachment"
 else
     echo -e "${COLOR_RED}✗ --attachment flag not found${COLOR_RESET}"
 fi
@@ -40,20 +51,20 @@ echo ""
 # Test 3: List Vision Patterns
 echo -e "${COLOR_YELLOW}[3/8] Checking for vision/image patterns...${COLOR_RESET}"
 echo -e "${COLOR_BLUE}Custom patterns found:${COLOR_RESET}"
-fabric --listpatterns | grep -i "image\|ocr\|vision" || echo "  No vision patterns found in built-in patterns"
+$FABRIC_CMD --listpatterns | grep -i "image\|ocr\|vision" || echo "  No vision patterns found in built-in patterns"
 echo ""
 
 # Test 4: Check Available Vendors
 echo -e "${COLOR_YELLOW}[4/8] Checking vision-capable vendors...${COLOR_RESET}"
 echo -e "${COLOR_BLUE}Vision-capable vendors:${COLOR_RESET}"
-fabric --listvendors | grep -E "(OpenAI|Gemini|Anthropic|Claude)" | while read vendor; do
+$FABRIC_CMD --listvendors | grep -E "(OpenAI|Gemini|Anthropic|Claude)" | while read vendor; do
     echo -e "  ${COLOR_GREEN}✓${COLOR_RESET} $vendor"
 done
 echo ""
 
 # Test 5: Check Current Model
 echo -e "${COLOR_YELLOW}[5/8] Checking current default model...${COLOR_RESET}"
-CURRENT_MODEL=$(fabric --listmodels | grep '^\s*\*' | sed 's/^\s*\*\s*\[\d*\]\s*//' || echo "No default model set")
+CURRENT_MODEL=$($FABRIC_CMD --listmodels | grep '^\s*\*' | sed 's/^\s*\*\s*\[\d*\]\s*//' || echo "No default model set")
 echo -e "  Current model: ${COLOR_BLUE}$CURRENT_MODEL${COLOR_RESET}"
 echo ""
 
@@ -112,16 +123,16 @@ echo ""
 echo -e "${COLOR_BLUE}To test with an actual image, run one of these commands:${COLOR_RESET}"
 echo ""
 echo -e "  ${COLOR_GREEN}# Test with local image:${COLOR_RESET}"
-echo -e "  fabric -a /path/to/your/image.jpg -p image-text-extraction"
+echo -e "  $FABRIC_CMD -a /path/to/your/image.jpg -p image-text-extraction"
 echo ""
 echo -e "  ${COLOR_GREEN}# Test with URL:${COLOR_RESET}"
-echo -e "  fabric -a 'https://example.com/image.jpg' -p expert-ocr-engine"
+echo -e "  $FABRIC_CMD -a 'https://example.com/image.jpg' -p expert-ocr-engine"
 echo ""
 echo -e "  ${COLOR_GREEN}# Test with JSON output:${COLOR_RESET}"
-echo -e "  fabric -a /path/to/image.jpg -p analyze-image-json -m gpt-4o"
+echo -e "  $FABRIC_CMD -a /path/to/image.jpg -p analyze-image-json -m gpt-4o"
 echo ""
 echo -e "  ${COLOR_GREEN}# Test with specific model:${COLOR_RESET}"
-echo -e "  echo 'Describe this image' | fabric -a image.jpg -m gpt-4o"
+echo -e "  echo 'Describe this image' | $FABRIC_CMD -a image.jpg -m gpt-4o"
 echo ""
 
 # Summary
@@ -133,7 +144,7 @@ echo ""
 # Check if vision is ready
 VISION_READY=true
 
-if ! fabric --help | grep -q "attachment"; then
+if ! $FABRIC_CMD --help | grep -q "attachment"; then
     VISION_READY=false
 fi
 
@@ -153,10 +164,10 @@ else
     echo -e "${COLOR_RED}⚠ Fabric vision support needs configuration${COLOR_RESET}"
     echo ""
     echo -e "${COLOR_YELLOW}Setup steps:${COLOR_RESET}"
-    echo "  1. Run: fabric --setup"
+    echo "  1. Run: $FABRIC_CMD --setup"
     echo "  2. Configure OpenAI or Gemini API key"
     echo "  3. Set a vision-capable model as default"
-    echo "  4. Test with: fabric -a image.jpg -p image-text-extraction"
+    echo "  4. Test with: $FABRIC_CMD -a image.jpg -p image-text-extraction"
 fi
 
 echo ""

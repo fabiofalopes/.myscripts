@@ -5,6 +5,17 @@
 
 set -e
 
+# Detect fabric command
+if command -v fabric-ai &> /dev/null; then
+    FABRIC_CMD="fabric-ai"
+elif command -v fabric &> /dev/null; then
+    FABRIC_CMD="fabric"
+else
+    echo "Error: Neither 'fabric' nor 'fabric-ai' command found."
+    echo "Please install fabric: https://github.com/danielmiessler/fabric"
+    exit 1
+fi
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -84,7 +95,7 @@ for pattern_info in "${PATTERNS[@]}"; do
     echo ""
     
     # Check if pattern exists
-    if ! fabric --listpatterns | grep -q "^${pattern}$"; then
+    if ! $FABRIC_CMD --listpatterns | grep -q "^${pattern}$"; then
         echo -e "${YELLOW}⚠ Pattern '$pattern' not found. Skipping...${RESET}"
         echo ""
         continue
@@ -97,7 +108,7 @@ for pattern_info in "${PATTERNS[@]}"; do
     START_TIME=$(date +%s)
     
     # Run fabric OCR
-    if fabric -a "$IMAGE" -p "$pattern" $MODEL_FLAG > "$OUTPUT_FILE" 2>&1; then
+    if $FABRIC_CMD -a "$IMAGE" -p "$pattern" $MODEL_FLAG > "$OUTPUT_FILE" 2>&1; then
         END_TIME=$(date +%s)
         ELAPSED=$((END_TIME - START_TIME))
         echo "$ELAPSED" > "$TIME_FILE"
