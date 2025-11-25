@@ -1,0 +1,106 @@
+```json
+{
+  "kb_name": "kb-2025-06-16-home-network-security",
+  "dimensions": [
+    {
+      "id": "dim-001",
+      "filename": "router-admin-password-change.md",
+      "type": "technical",
+      "weight": "high",
+      "keywords": ["router", "admin", "password", "change", "default"],
+      "content": "The very first thing I do is change the router’s admin password. The sticker on the bottom of the unit usually has a laughably weak default like admin/admin; leaving that in place is practically an invitation."
+    },
+    {
+      "id": "dim-002",
+      "filename": "firmware-updates-schedule.md",
+      "type": "technical",
+      "weight": "high",
+      "keywords": ["firmware", "updates", "router", "schedule", "security"],
+      "content": "I schedule firmware updates the same way I schedule dental cleanings: automatically if the vendor supports it, or a recurring calendar reminder every first Monday so I never forget."
+    },
+    {
+      "id": "dim-003",
+      "filename": "wi-fi-encryption-protocol.md",
+      "type": "technical",
+      "weight": "high",
+      "keywords": ["wi-fi", "encryption", "wpa3", "wpa2", "aes"],
+      "content": "I switch the Wi-Fi encryption to the newest protocol the router offers—ideally WPA3, but at minimum WPA2-AES. Anything labeled WEP or TKIP might as well be unencrypted."
+    },
+    {
+      "id": "dim-004",
+      "filename": "guest-network-isolation.md",
+      "type": "technical",
+      "weight": "medium",
+      "keywords": ["guest", "network", "isolation", "iot", "devices"],
+      "content": "I spin up a separate guest SSID for visitors and for every questionable IoT gadget. That way if a cheap smart plug turns malicious it can’t sniff traffic from my laptops or NAS."
+    },
+    {
+      "id": "dim-005",
+      "filename": "router-management-interface-exposure.md",
+      "type": "technical",
+      "weight": "high",
+      "keywords": ["router", "management", "interface", "wan", "remote", "disable"],
+      "content": "I disable WAN-side management. If I need to reach my router remotely I’d rather set up a VPN tunnel than leave the web console exposed to the entire Internet."
+    },
+    {
+      "id": "dim-006",
+      "filename": "complex-wi-fi-passphrase.md",
+      "type": "technical",
+      "weight": "high",
+      "keywords": ["wi-fi", "passphrase", "complex", "diceware", "password"],
+      "content": "I pick a Wi-Fi passphrase that is long enough to feel mildly inconvenient to type—four or five random diceware words beats a short string of symbols any day."
+    },
+    {
+      "id": "dim-007",
+      "filename": "dns-security-filtering.md",
+      "type": "technical",
+      "weight": "medium",
+      "keywords": ["dns", "filtering", "quad9", "cloudflare", "malware"],
+      "content": "I point DNS to a filtered resolver like Quad9 or Cloudflare’s malware-blocking service; it’s a zero-cost layer that keeps known-bad domains from resolving."
+    },
+    {
+      "id": "dim-008",
+      "filename": "backup-router-configuration.md",
+      "type": "technical",
+      "weight": "medium",
+      "keywords": ["backup", "router", "configuration", "export", "restore"],
+      "content": "Once everything is locked down I export the router config to a small encrypted file on my NAS. If the hardware dies I can restore settings without starting from scratch."
+    }
+  ],
+  "quality_score": 96,
+  "completeness": "All actionable advice present; no generic filler",
+  "suggestions": []
+}
+```
+
+# Router Admin Password Change
+
+The very first thing I do is change the router’s admin password. The sticker on the bottom of the unit usually has a laughably weak default like admin/admin; leaving that in place is practically an invitation.
+
+# Firmware Updates Schedule
+
+I schedule firmware updates the same way I schedule dental cleanings: automatically if the vendor supports it, or a recurring calendar reminder every first Monday so I never forget.
+
+# Wi-Fi Encryption Protocol
+
+I switch the Wi-Fi encryption to the newest protocol the router offers—ideally WPA3, but at minimum WPA2-AES. Anything labeled WEP or TKIP might as well be unencrypted.
+
+# Guest Network Isolation
+
+I spin up a separate guest SSID for visitors and for every questionable IoT gadget. That way if a cheap smart plug turns malicious it can’t sniff traffic from my laptops or NAS.
+
+# Router Management Interface Exposure
+
+I disable WAN-side management. If I need to reach my router remotely I’d rather set up a VPN tunnel than leave the web console exposed to the entire Internet.
+
+# Complex Wi-Fi Passphrase
+
+I pick a Wi-Fi passphrase that is long enough to feel mildly inconvenient to type—four or five random diceware words beats a short string of symbols any day.
+
+# DNS Security Filtering
+
+I point DNS to a filtered resolver like Quad9 or Cloudflare’s malware-blocking service; it’s a zero-cost layer that keeps known-bad domains from resolving.
+
+# Backup Router Configuration
+
+Once everything is locked down I export the router config to a small encrypted file on my NAS. If the hardware dies I can restore settings without starting from scratch.

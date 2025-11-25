@@ -1,0 +1,85 @@
+```json
+{
+  "kb_name": "kb-2024-12-01-raw-ideias-ideias-ideas",
+  "dimensions": [
+    {
+      "id": "dim-001",
+      "filename": "creative-process-fragmentation-and-recomposition.md",
+      "type": "cognitive",
+      "weight": "high",
+      "keywords": ["creativity", "fragmentation", "recomposition", "process"],
+      "content": "I feel like my creative process is constantly fragmenting and recomposing itself in ways I can't predict or control. It's like watching a kaleidoscope that keeps turning itself."
+    },
+    {
+      "id": "dim-002",
+      "filename": "idea-avalanche-anxiety.md",
+      "type": "affective",
+      "weight": "high",
+      "keywords": ["ideas", "avalanche", "anxiety", "overwhelming"],
+      "content": "Sometimes I get overwhelmed by how many ideas I have and how few of them ever see the light of day. It's like having a library in my head where most of the books are blank or half-written."
+    },
+    {
+      "id": "dim-003",
+      "filename": "fear-of-idea-loss.md",
+      "type": "affective",
+      "weight": "medium",
+      "keywords": ["fear", "loss", "ideas", "slipping"],
+      "content": "I worry that I'm losing ideas faster than I can capture them, like trying to hold water in my hands."
+    },
+    {
+      "id": "dim-004",
+      "filename": "obsession-with-idea-capture-systems.md",
+      "type": "cognitive",
+      "weight": "medium",
+      "keywords": ["obsession", "capture", "systems", "tools"],
+      "content": "I've become obsessed with finding the perfect system to capture and organize everything, but the perfect system keeps changing before I can even finish building it."
+    },
+    {
+      "id": "dim-005",
+      "filename": "digital-garden-vs-second-brain-tension.md",
+      "type": "cognitive",
+      "weight": "medium",
+      "keywords": ["digital-garden", "second-brain", "tension", "approach"],
+      "content": "Part of me wants to build a beautiful digital garden, but another part just wants to dump everything into a second brain and let the connections emerge naturally. I can't decide which approach is more 'me'."
+    },
+    {
+      "id": "dim-006",
+      "filename": "tool-fatigue-and-perfectionism-paralysis.md",
+      "type": "affective",
+      "weight": "high",
+      "keywords": ["tools", "fatigue", "perfectionism", "paralysis"],
+      "content": "The tools keep changing—Notion to Obsidian to Roam to whatever's next—and I feel like I'm always migrating, never settling, never actually doing the work. Maybe the real problem isn't the tools but my inability to commit to imperfection."
+    }
+  ],
+  "quality_score": 88,
+  "completeness": "All semantic content captured across six distinct dimensions",
+  "suggestions": [
+    "Consider exploring the relationship between the fear of losing ideas and the obsession with capture systems",
+    "The tension between digital garden and second-brain approaches might benefit from deeper examination"
+  ]
+}
+```
+
+# Creative Process Fragmentation and Recomposition
+
+I feel like my creative process is constantly fragmenting and recomposing itself in ways I can't predict or control. It's like watching a kaleidoscope that keeps turning itself.
+
+# Idea Avalanche Anxiety
+
+Sometimes I get overwhelmed by how many ideas I have and how few of them ever see the light of day. It's like having a library in my head where most of the books are blank or half-written.
+
+# Fear of Idea Loss
+
+I worry that I'm losing ideas faster than I can capture them, like trying to hold water in my hands.
+
+# Obsession With Idea Capture Systems
+
+I've become obsessed with finding the perfect system to capture and organize everything, but the perfect system keeps changing before I can even finish building it.
+
+# Digital Garden vs Second Brain Tension
+
+Part of me wants to build a beautiful digital garden, but another part just wants to dump everything into a second brain and let the connections emerge naturally. I can't decide which approach is more 'me'.
+
+# Tool Fatigue and Perfectionism Paralysis
+
+The tools keep changing—Notion to Obsidian to Roam to whatever's next—and I feel like I'm always migrating, never settling, never actually doing the work. Maybe the real problem isn't the tools but my inability to commit to imperfection.

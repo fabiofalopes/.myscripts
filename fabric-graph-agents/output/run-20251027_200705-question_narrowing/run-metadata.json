@@ -1,0 +1,11 @@
+{
+  "run_id": "run-20251027_200705-question_narrowing",
+  "timestamp": "2025-10-27T20:07:17Z",
+  "agent": "question_narrowing",
+  "input": "raw-ideias-ideias-ideas.md",
+  "dimensions_extracted":        0,
+  "patterns_executed": ["extract_questions", "improve_prompt", "ask_secure_by_design_questions"],
+  "execution_time_seconds": 12,
+  "quality_score": 0,
+  "output_location": "/Users/fabiofalopes/Documents/projetos/hub/.myscripts/fabric-graph-agents/lib/../output/run-20251027_200705-question_narrowing/output/final.md"
+}

@@ -1,0 +1,35 @@
+OVERVIEW  
+The input is a journalist’s interview guide for a $300B alternative-asset CEO; securing the conversation protects market-moving information, reputation, and regulatory compliance.
+
+ARCHITECTURE:  
+- Which encrypted communication platform and version will host the raw recording and subsequent transcripts?  
+- How will the audio/video feed be isolated from the firm’s corporate network during transfer and storage?  
+- What redundancy exists to guarantee the interview file survives a ransomware attack on the journalist’s laptop?  
+- Will the final published audio undergo integrity hashing so any tampering is detectable by listeners?  
+- Are micro-segmented cloud buckets used to separate draft, final, and archived versions of the content?  
+
+AUTHENTICATION & ACCESS CONTROL:  
+- Which multi-factor authentication gates access to the pre-release transcript for the CEO, journalist, and editors?  
+- How are time-bound, least-privilege credentials enforced for transcribers and external fact-checkers?  
+- Is role-based access re-certified automatically when deal-team personnel rotate onto new funds?  
+- What prevents a compromised editor credential from unilaterally publishing an unapproved version?  
+
+DATA MINIMIZATION & RETENTION:  
+- Which personal data points (family names, health, geopolitical views) will be redacted before publication?  
+- How long after publication will raw files be retained, and what cryptographic erasure method will be used?  
+- Are voice-clone detection checks run to ensure no synthetic audio is inserted post-recording?  
+
+THIRD-PARTY & SUPPLY-CHAIN:  
+- Which security standards must the podcast-editing contractor meet before receiving audio snippets?  
+- How is the file-transfer vendor audited for SOC-2 Type II or ISO 27001 compliance?  
+- What contractual clauses require immediate notification if the transcription SaaS suffers a breach?  
+
+REGULATORY & ETHICAL:  
+- Does the interview contain material non-public information that triggers SEC blackout or insider-trading controls?  
+- Which encryption standard satisfies cross-border data-sovereignty rules if the CEO is overseas during recording?  
+- How will the firm demonstrate audit trails to regulators if market rumors trace back to this interview?  
+
+RESILIENCE & INCIDENT RESPONSE:  
+- What is the recovery-time objective if the publication platform is defaced hours before market open?  
+- Which kill-switch procedure exists to retract the episode across all syndicated podcast channels instantly?  
+- How are listeners notified if a corrected version is released to counteract misinformation?

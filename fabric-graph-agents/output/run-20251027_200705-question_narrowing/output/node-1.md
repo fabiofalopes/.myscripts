@@ -1,0 +1,11 @@
+QUESTIONS
+- Can you give us a quick overview of what Perplexity is and how it works?
+- What makes Perplexity different from a traditional search engine?
+- How do you ensure the accuracy of the answers you provide?
+- What’s your take on the current state of AI in search?
+- How do you see AI changing the way we find and consume information?
+- What are some of the biggest challenges you face in building an AI-powered search engine?
+- How do you handle misinformation or biased sources?
+- What’s next for Perplexity—any new features or expansions on the horizon?
+- How do you see the competitive landscape evolving, especially with Google and Microsoft in the mix?
+- What advice would you give to founders building AI-native products today?

@@ -1,0 +1,29 @@
+{
+  "strategy": "sequential_enrichment",
+  "graph": {
+    "nodes": [
+      {
+        "id": "node-1",
+        "pattern": "extract_questions",
+        "input_dimensions": ["all"],
+        "parallel_group": 1,
+        "description": "Extract implicit questions from vague input"
+      },
+      {
+        "id": "node-2",
+        "pattern": "improve_prompt",
+        "input_dimensions": ["node-1"],
+        "parallel_group": 2,
+        "description": "Refine questions for clarity"
+      },
+      {
+        "id": "node-3",
+        "pattern": "ask_secure_by_design_questions",
+        "input_dimensions": ["node-2"],
+        "parallel_group": 3,
+        "description": "Generate specific security questions"
+      }
+    ],
+    "execution_order": [[1], [2], [3]]
+  }
+}

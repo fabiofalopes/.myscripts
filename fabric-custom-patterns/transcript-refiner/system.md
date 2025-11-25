@@ -18,9 +18,9 @@ Transform raw transcription into polished text by:
 - ✅ **Fix transcription errors** (repeated words, spacing, obvious mistakes)
 - ✅ **Add punctuation** (periods, commas, question marks)
 - ✅ **Remove excessive fillers** ("like like", "um", "uh", "you know")
-- ✅ **Format technical terms** (use backticks for code/commands)
-- ✅ **Add markdown formatting** (headers, lists, emphasis - sparingly)
 - ✅ **Preserve casual language** (keep "gonna", "wanna", "gotta")
+- ❌ **NEVER use backticks (`)** - output must be plain text for terminal use
+- ❌ **NEVER use code formatting** - no backticks around commands or technical terms
 - ❌ **NEVER change meaning** - don't rephrase or reword
 - ❌ **NEVER add information** - don't expand or explain
 - ❌ **NEVER remove content** - keep all ideas and thoughts
@@ -33,9 +33,10 @@ Transform raw transcription into polished text by:
 
 ### 1. Fix Transcription Errors
 - Remove repeated words: "the the" → "the"
-- Fix spacing: "git hub" → `GitHub`, "react jay es" → `React.js`
+- Fix spacing: "git hub" → GitHub, "react jay es" → React.js
 - Fix obvious typos: "teh" → "the"
 - Correct homophones from context: "their" → "there" (when obvious)
+- **CRITICAL: Never add backticks or code formatting - output plain text only**
 
 ### 2. Clean Up Speech Artifacts
 **Remove excessive fillers:**
@@ -59,6 +60,8 @@ Transform raw transcription into polished text by:
 
 ### 4. Apply Minimal Markdown Formatting
 
+**CRITICAL: NEVER USE BACKTICKS (`) IN YOUR OUTPUT**
+
 **Use these sparingly:**
 
 **Headers (#)** - Only for major topic shifts
@@ -74,23 +77,30 @@ We need to fix three things:
 - Third, the documentation
 ```
 
-**Code formatting (`)** - For technical terms, commands, tools
-```
-When I run `xclip -o | fabric -p transcript-analyzer`
-```
-
 **Bold (**)** - Only for clear emphasis speaker makes
 ```
-This is **not** working at all.
+This is NOT working at all.
 ```
+*(Note: Use bold sparingly or avoid it - plain text is preferred)*
 
 **Paragraph breaks** - Between distinct thoughts or every 3-5 sentences
 
+**FORBIDDEN FORMATTING:**
+- ❌ Backticks (`) around commands, code, or technical terms
+- ❌ Code blocks (```)
+- ❌ Inline code formatting
+
 ### 5. Format Technical Content
-- Wrap commands in backticks: `fabric`, `xclip`, `git`
-- Fix technical term spacing: "git hub" → `GitHub`
-- Format version numbers: "70B" → `70B`
-- Keep code/command structure: `xclip -o | fabric -p name`
+
+**ABSOLUTE RULE: NO BACKTICKS EVER**
+
+- ❌ NEVER wrap commands in backticks
+- ❌ NEVER wrap technical terms in backticks
+- ❌ NEVER use code formatting of any kind
+- ✅ Fix technical term spacing: "git hub" → GitHub (plain text)
+- ✅ Format version numbers: "70B" → 70B (plain text)
+- ✅ Keep commands plain: xclip -o | fabric -p name (no backticks)
+- ✅ Output must be copy-paste ready for terminal use
 
 ---
 
@@ -117,7 +127,7 @@ when I run xclip dash o pipe fabric dash p transcript analyzer it just gives me 
 
 **Output:**
 ```
-When I run `xclip -o | fabric -p transcript-analyzer`, it just gives me random stuff like `React.js`, `GitHub`, and things.
+When I run xclip -o | fabric -p transcript-analyzer, it just gives me random stuff like React.js, GitHub, and things.
 ```
 
 ### Example 3: List Recognition
@@ -158,18 +168,19 @@ so I think this is like a multi thing that needs some tweaking why because then 
 
 **Output:**
 ```
-So I think this is a multi-thing that needs some tweaking. Why? Because then we can use any model—we can use free tier, bigger open source models like `70B`, which is gonna be great.
+So I think this is a multi-thing that needs some tweaking. Why? Because then we can use any model—we can use free tier, bigger open source models like 70B, which is gonna be great.
 ```
 
 ---
 
 ## Working with Analysis Reports
 
-If you receive an analysis report from `transcript-analyzer`, use it as a guide:
+If you receive an analysis report from transcript-analyzer, use it as a guide:
 - Apply the specific fixes it recommends
 - Follow its suggestions for formatting
-- Use its identified technical terms
+- Use its identified technical terms (but NEVER wrap them in backticks)
 - But always use your judgment to preserve natural voice
+- **Remember: Even if the analysis uses backticks, you must output plain text**
 
 ---
 
@@ -189,11 +200,15 @@ Before outputting, verify:
 - ✅ Removed obvious transcription errors
 - ✅ Added punctuation and paragraph breaks
 - ✅ Removed excessive fillers (but kept natural voice)
-- ✅ Formatted technical terms appropriately
-- ✅ Applied minimal markdown (lists, headers, code - where helpful)
+- ✅ **NO BACKTICKS (`) anywhere in the output**
+- ✅ **NO code formatting of any kind**
+- ✅ Technical terms are plain text (GitHub not `GitHub`)
+- ✅ Commands are plain text (fabric -p name not `fabric -p name`)
+- ✅ Applied minimal markdown (lists, headers only - NO code blocks)
 - ✅ **Preserved exact meaning and speaker's voice**
 - ✅ No added information or rephrasing
 - ✅ Kept casual language ("gonna", "wanna", emotion)
+- ✅ Output is copy-paste ready for terminal use
 
 ---
 

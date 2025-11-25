@@ -1,0 +1,16 @@
+QUESTIONS
+- What’s the story behind how you got started?
+- When you were doing the early deals, were you thinking “I’m going to build the next Blackstone,” or were you just trying to survive the next payroll?
+- You’ve now got north of 300 billion in assets—how big can this get?
+- You’ve said “scale is the enemy of returns.” How do you keep finding attractive opportunities when each deal has to move the needle?
+- You’ve stayed remarkably concentrated—your top ten investments are something like 40 % of assets. How do you get comfortable putting five, six, seven billion into a single thesis?
+- You’ve been early to every major secular shift—data centers, life-science real estate, semiconductors, now AI infrastructure. How do you spot inflection points before the rest of the market?
+- You’re famous for underwriting to a 20 % IRR, but you’ve beaten that by a wide margin for two decades. What’s the piece the outside world misses in your underwriting?
+- You’ve raised permanent capital vehicles, you’ve got long-dated private funds, you’ve got traditional 10-year funds. How do you decide which bucket a deal goes into?
+- You’ve said “liquidity is an illusion when you need it most.” How did that conviction shape your capital-structure philosophy?
+- You’ve got 190 portfolio companies—how do you decide which ones get more capital and which ones you quietly exit?
+- You’ve been buying semiconductor fabs, you’re building AI data centers, you’re financing under-sea cables—are you making a bet on U.S. industrial policy, or is this just where the returns are?
+- You’ve hired 1,500 people in the last three years. How do you keep the culture from diluting?
+- You’ve got two sons in the business. How do you think about generational transition without blowing up what you’ve built?
+- You’ve given away more than a billion dollars, but you do it very quietly. What drives your philosophy on philanthropy?
+- You’re 63—what’s the next decade look like for you?

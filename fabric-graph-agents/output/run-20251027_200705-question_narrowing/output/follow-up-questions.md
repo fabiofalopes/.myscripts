@@ -1,0 +1,28 @@
+QUESTIONS
+
+- Which cloud region and redundancy tier will host the model weights to withstand nation-state takedown requests?
+- How does the system isolate prompt context from other tenants to prevent cross-customer data leakage?
+- What cryptographic protocol secures the real-time WebSocket channel between user browser and inference endpoint?
+- Will the answer cache reside in memory-only volatile storage or encrypted at-rest SSDs with hardware-rooted keys?
+- How quickly can new model weights be rolled back if an adversarial prompt triggers toxic output?
+- Where exactly is the raw query logged, who can access it, and after how many days is it cryptographically shredded?
+- Are user IP addresses one-way hashed with rotating salts before analytics pipelines touch them?
+- How is copyrighted or PII-containing training data expunged upon lawful right-to-be-forgotten requests?
+- Does the retention schedule treat voice audio differently from text when deriving embeddings for future fine-tuning?
+- What differential-privacy epsilon budget is enforced per batch to stop membership-inference attacks?
+- Which red-team benchmarks validate resistance to prompt injection, jailbreaks, and indirect task injection via uploaded documents?
+- How are output filters audited for fairness so an adversary cannot elicit discriminatory or violent completions?
+- Is there an enforced timeout and token limit to stop recursive self-prompting that might exfiltrate internal instructions?
+- What checksum or signature verifies that served weights match the audited version and have not been Trojaned in transit?
+- Will enterprise customers use SAML/OIDC SSO with enforced phishing-resistant MFA before querying the API?
+- How are rotating service-to-service JWTs scoped so a compromised microservice cannot request full model parameters?
+- Is there a just-in-time credential vending mechanism for engineers debugging live sessions without persistent secrets?
+- Which runtime anomaly score triggers an immediate model shutdown if output entropy spikes suggest data exfiltration?
+- How are user-reported harmful answers escalated, and what SLAs guarantee model fixes within hours, not weeks?
+- Do on-call responders have pre-authorised kill switches that work even if the primary console is under DDoS?
+- Which external auditor will certify the system against ISO 27001, SOC 2 Type II, and emerging EU AI Act rules?
+- How will you prove to regulators that training data did not include illegal or copyright-infringing content?
+- What documentation pipeline keeps model cards, data sheets, and risk assessments version-synced with each release?
+- Can users toggle a zero-retention mode that guarantees prompts and answers vanish from logs within minutes?
+- How will you notify customers if future model updates change the privacy posture or expand data sharing?
+- Does the privacy notice forbid re-identifying anonymised queries via behavioural fingerprinting across sessions?
