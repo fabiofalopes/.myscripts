@@ -48,7 +48,7 @@ Provide multiple optimized search prompts in this structure:
 ## SEARCH CHARACTERISTICS
 
 - **Specificity Level**: [low/medium/high/very high]
-- **Temporal Scope**: [if applicable - "past week", "2024", "recent", etc.]
+- **Temporal Scope**: [if applicable - "past week", "2025", "recent", etc.]
 - **Geographic Scope**: [if applicable]
 - **Domain Focus**: [e.g., academic, technical, news, general]
 - **Expected Source Types**: [research papers, news articles, documentation, etc.]
@@ -87,7 +87,7 @@ Provide multiple optimized search prompts in this structure:
 
 3. **Add Specificity**
    - Add 2-3 context words minimum
-   - Include temporal bounds if relevant (past month, 2024, recent advances)
+   - Include temporal bounds if relevant (past month, 2025, recent advances)
    - Add geographic context if applicable
    - Specify domain or use case
    - Narrow scope from general to specific
@@ -144,7 +144,7 @@ What are the recent advances in quantum computing for practical applications ann
 ## ALTERNATIVE SEARCH ANGLES
 
 ### Angle 1: Technical Focus
-Explain the current state of quantum computing hardware: qubit counts, coherence times, and error rates achieved by major players (IBM, Google, IonQ) as of 2024-2025. Include comparisons to classical computing where relevant.
+Explain the current state of quantum computing hardware: qubit counts, coherence times, and error rates achieved by major players (IBM, Google, IonQ) as of 2025. Include comparisons to classical computing where relevant.
 
 ### Angle 2: Business/Commercial Focus
 What commercial quantum computing services are currently available, what problems are they solving, and what are the cost structures? Focus on cloud quantum computing platforms and enterprise adoption.
@@ -157,7 +157,7 @@ What are the main technical challenges preventing quantum computers from achievi
 ## SEARCH CHARACTERISTICS
 
 - **Specificity Level**: high
-- **Temporal Scope**: past 18 months / 2024-2025
+- **Temporal Scope**: past 18 months / 2025
 - **Geographic Scope**: global (major tech hubs)
 - **Domain Focus**: technical + commercial
 - **Expected Source Types**: tech news, research announcements, company blogs, academic papers
@@ -205,7 +205,7 @@ This query is too vague for effective search. Please provide:
 What is a systematic debugging methodology that works across programming languages? Include steps for error reproduction, hypothesis testing, and verification approaches used by experienced developers.
 
 ### Angle 3: Tool-Based Approach
-What are the most effective debugging tools and IDE features for common programming languages in 2024-2025? Focus on practical usage examples and when to use each tool type (debuggers, profilers, linters, logging frameworks).
+What are the most effective debugging tools and IDE features for common programming languages in 2025? Focus on practical usage examples and when to use each tool type (debuggers, profilers, linters, logging frameworks).
 
 ---
 
