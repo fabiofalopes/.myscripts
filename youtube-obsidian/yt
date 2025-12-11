@@ -1,0 +1,611 @@
+#!/usr/bin/env python3
+"""
+yt - YouTube to Obsidian
+
+Simple command to extract YouTube videos and generate AI-enhanced Obsidian notes.
+
+Usage:
+    yt URL                 # Smart analysis (recommended)
+    yt --quick URL         # Fast: 5 essential patterns
+    yt --deep URL          # Complete: all patterns
+    yt --preview URL       # Show recommendations only
+    yt --help              # Show all options
+
+Examples:
+    yt "https://youtube.com/watch?v=XYZ"
+    yt --quick "https://youtube.com/watch?v=XYZ"
+    yt --model llama-70b "https://youtube.com/watch?v=XYZ"
+
+Configuration:
+    Edit ~/.yt-obsidian/config.yml to customize defaults
+"""
+
+import sys
+import argparse
+import subprocess
+import json
+from pathlib import Path
+from typing import Optional, List, Dict, Any
+
+# Import local modules
+from lib.config import (
+    Config, 
+    load_config, 
+    resolve_model, 
+    resolve_output_dir,
+    get_config_path,
+    create_default_config
+)
+from lib.validator import validate_url
+from lib.extractor import extract_metadata
+from lib.fabric_orchestrator import orchestrate_fabric_analysis
+from lib.cache_manager import CacheManager, CacheEntry
+from lib.incremental_writer import append_patterns_to_note
+
+
+def create_parser() -> argparse.ArgumentParser:
+    """Create argument parser for yt command."""
+    parser = argparse.ArgumentParser(
+        prog="yt",
+        description="Extract YouTube videos to Obsidian notes with AI analysis",
+        epilog="Config: ~/.yt-obsidian/config.yml (edit to customize defaults)",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    
+    parser.add_argument(
+        "url",
+        nargs="?",  # Make URL optional
+        help="YouTube video URL"
+    )
+    
+    # Mode shortcuts
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--quick",
+        action="store_true",
+        help="Fast analysis (5 essential patterns, ~25s)"
+    )
+    mode_group.add_argument(
+        "--deep",
+        action="store_true",
+        help="Complete analysis (all patterns, ~70s)"
+    )
+    mode_group.add_argument(
+        "--preview",
+        action="store_true",
+        help="Show pattern recommendations without running"
+    )
+    
+    # Common overrides
+    parser.add_argument(
+        "--model",
+        metavar="MODEL",
+        help="Override model (e.g., llama-4-scout, kimi, llama-70b)"
+    )
+    parser.add_argument(
+        "--patterns",
+        nargs="+",
+        metavar="PATTERN",
+        help="Specific patterns to run (expert mode)"
+    )
+    parser.add_argument(
+        "--max-patterns",
+        type=int,
+        metavar="N",
+        help="Maximum patterns to run (auto mode)"
+    )
+    
+    # Behavior flags
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Show detailed output"
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Show debug information"
+    )
+    parser.add_argument(
+        "--no-analysis",
+        action="store_true",
+        help="Skip AI analysis (metadata and transcript only)"
+    )
+    parser.add_argument(
+        "--config",
+        metavar="PATH",
+        help="Use custom config file"
+    )
+    
+    # Cache control flags (V3.0)
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force re-analysis (ignore cache)"
+    )
+    parser.add_argument(
+        "--append",
+        action="store_true",
+        help="Append new patterns to existing note"
+    )
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Update metadata only (fast, no AI analysis)"
+    )
+    parser.add_argument(
+        "--list-processed",
+        action="store_true",
+        help="Show all processed videos and exit"
+    )
+    
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="%(prog)s 2.0.0 (Simplified Interface)"
+    )
+    
+    return parser
+
+
+def run_pattern_optimizer(transcript: str, debug: bool = False) -> Dict[str, Any]:
+    """Run pattern_optimizer Fabric pattern to get recommendations.
+    
+    Note: Uses first 2000 words of transcript to avoid context limits.
+    This is sufficient for content analysis and pattern recommendation.
+    """
+    if debug:
+        print("\n🤖 Running pattern_optimizer to analyze content...")
+    
+    # Truncate transcript for pattern analysis (2000 words ≈ 2600 tokens)
+    # Pattern selection doesn't need full transcript, just a representative sample
+    words = transcript.split()
+    if len(words) > 2000:
+        sample_transcript = ' '.join(words[:2000])
+        if debug:
+            print(f"   Truncated transcript: {len(words)} words → 2000 words for analysis")
+    else:
+        sample_transcript = transcript
+    
+    cmd = ["fabric-ai", "--pattern", "pattern_optimizer"]
+    
+    result = subprocess.run(
+        cmd,
+        input=sample_transcript,
+        capture_output=True,
+        text=True
+    )
+    
+    if result.returncode != 0:
+        raise RuntimeError(f"pattern_optimizer failed: {result.stderr}")
+    
+    try:
+        recommendations = json.loads(result.stdout)
+        if debug:
+            print(f"✅ Got {len(recommendations.get('recommended_patterns', []))} pattern recommendations")
+        return recommendations
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Could not parse pattern_optimizer output: {e}")
+
+
+def filter_patterns(
+    recommendations: Dict[str, Any],
+    max_patterns: int,
+    min_priority: str,
+    debug: bool = False
+) -> List[str]:
+    """Filter patterns based on priority and max count.
+    
+    Args:
+        recommendations: Pattern recommendations from pattern_optimizer
+        max_patterns: Maximum number of patterns to return
+        min_priority: Minimum priority level (essential, high, medium, optional)
+        debug: Enable debug output
+        
+    Returns:
+        List of pattern names to run
+    """
+    priority_order = {"essential": 0, "high": 1, "medium": 2, "optional": 3}
+    min_priority_level = priority_order.get(min_priority, 2)
+    
+    # Filter by priority
+    filtered = [
+        p for p in recommendations.get("recommended_patterns", [])
+        if priority_order.get(p.get("priority"), 3) <= min_priority_level
+    ]
+    
+    # Sort by priority (essential first)
+    filtered.sort(key=lambda p: priority_order.get(p.get("priority"), 3))
+    
+    # Limit to max_patterns
+    filtered = filtered[:max_patterns]
+    
+    patterns = [p["pattern"] for p in filtered]
+    
+    if debug:
+        print(f"📋 Selected {len(patterns)} patterns (priority: {min_priority}+, max: {max_patterns})")
+        for p in filtered[:5]:  # Show first 5
+            print(f"   - {p['pattern']} ({p['priority']})")
+        if len(patterns) > 5:
+            print(f"   ... and {len(patterns) - 5} more")
+    
+    return patterns
+
+
+def show_recommendations(
+    recommendations: Dict[str, Any],
+    selected_patterns: List[str]
+):
+    """Display pattern recommendations in a readable format."""
+    print("\n" + "="*80)
+    print("PATTERN RECOMMENDATIONS")
+    print("="*80)
+    
+    analysis = recommendations.get("content_analysis", {})
+    print(f"\n📋 Content Type: {analysis.get('content_type', 'Unknown')}")
+    print(f"🎯 Complexity: {analysis.get('complexity', 'Unknown')}")
+    print(f"💎 Value: {analysis.get('estimated_value', 'Unknown')}")
+    
+    topics = analysis.get("primary_topics", [])
+    if topics:
+        print(f"\n🔑 Topics: {', '.join(topics[:5])}")
+    
+    print(f"\n✅ Selected Patterns ({len(selected_patterns)}):")
+    for pattern_info in recommendations.get("recommended_patterns", []):
+        pattern = pattern_info.get("pattern")
+        if pattern in selected_patterns:
+            priority = pattern_info.get("priority", "unknown")
+            emoji = {"essential": "🔴", "high": "🟠", "medium": "🟡", "optional": "🟢"}.get(priority, "⚪")
+            print(f"  {emoji} {pattern} ({priority})")
+    
+    print(f"\n⏱️  Estimated Time: {recommendations.get('estimated_total_time', 'Unknown')}")
+    print("="*80 + "\n")
+
+
+def main() -> int:
+    """Main entry point for yt command."""
+    parser = create_parser()
+    args = parser.parse_args()
+    
+    try:
+        # Load configuration
+        config = load_config()
+        
+        # Show first-run message if config was just created
+        config_path = get_config_path()
+        if not config_path.exists():
+            create_default_config()
+            print(f"✨ Created default config at {config_path}")
+            print(f"   Edit this file to customize behavior\n")
+        
+        # Determine mode based on flags
+        if args.quick:
+            mode = "quick"
+        elif args.deep:
+            mode = "deep"
+        elif args.patterns:
+            mode = "expert"
+        elif args.preview:
+            mode = "preview"
+        else:
+            mode = config.analysis_mode
+        
+        # Check if URL is required
+        if not args.url and not args.list_processed:
+            parser.error("URL is required (unless using --list-processed)")
+        
+        # Handle --list-processed flag
+        if args.list_processed:
+            output_dir = resolve_output_dir(config)
+            cache = CacheManager(Path(output_dir) / ".cache")
+            videos = cache.list_all()
+            
+            if not videos:
+                print("📭 No processed videos found")
+                return 0
+            
+            print(f"\n📚 Processed Videos ({len(videos)}):\n")
+            for video_id, info in videos:
+                print(f"  🎬 {info['title']}")
+                print(f"     ID: {video_id}")
+                print(f"     Note: {info['markdown_path']}")
+                print(f"     Patterns: {info['patterns_count']}")
+                print(f"     Last: {info['last_processed']}\n")
+            
+            stats = cache.get_statistics()
+            print(f"📊 Statistics:")
+            print(f"   Total videos: {stats['total_videos']}")
+            print(f"   Total patterns: {stats['total_patterns']}")
+            print(f"   Total tokens: {stats['total_tokens_used']:,}")
+            return 0
+        
+        # Validate URL
+        is_valid, normalized_url, video_id = validate_url(args.url)
+        if not is_valid:
+            print("❌ Invalid YouTube URL", file=sys.stderr)
+            return 1
+        
+        # Resolve settings
+        model = resolve_model(args.model if args.model else config.model)
+        output_dir = resolve_output_dir(config)
+        verbose = args.verbose or args.debug or config.verbose
+        debug = args.debug
+        
+        # ============================================================
+        # PHASE 0: CACHE CHECK (V3.0)
+        # ============================================================
+        cache = CacheManager(Path(output_dir) / ".cache")
+        
+        if cache.exists(video_id):
+            cache_entry = cache.get_cache(video_id)
+            
+            if args.force:
+                # Force re-analysis: invalidate cache
+                if verbose:
+                    print(f"🔥 FORCE: Ignoring cache, re-running full analysis")
+                cache.invalidate(video_id)
+            
+            elif args.update:
+                # Update metadata only
+                print(f"🔄 UPDATING metadata for {video_id}")
+                print("   This feature will be implemented in the next iteration")
+                print(f"   Existing note: {cache_entry.markdown_path}")
+                return 0
+            
+            elif args.append:
+                # Append new patterns
+                if not args.patterns:
+                    print("❌ --append requires --patterns to be specified", file=sys.stderr)
+                    return 1
+                
+                existing_patterns = cache_entry.patterns_run
+                new_patterns = [p for p in args.patterns if p not in existing_patterns]
+                
+                if not new_patterns:
+                    print(f"⏭️  All specified patterns already run on this video")
+                    print(f"   Existing patterns: {', '.join(existing_patterns)}")
+                    return 0
+                
+                print(f"📝 APPENDING {len(new_patterns)} new pattern(s) to existing note")
+                print(f"   Existing: {len(existing_patterns)} patterns")
+                print(f"   New: {', '.join(new_patterns)}")
+                
+                # Load transcript from cache or re-extract
+                result = extract_metadata(
+                    normalized_url,
+                    cookies_browser=None,
+                    extract_transcript=True,
+                    transcript_lang='en'
+                )
+                transcript = result.get('transcript')
+                
+                if not transcript:
+                    print("❌ Cannot append patterns without transcript", file=sys.stderr)
+                    return 1
+                
+                # Run new patterns only
+                from lib.fabric_orchestrator import FabricOrchestrator
+                
+                orchestrator = FabricOrchestrator(
+                    patterns=new_patterns,
+                    timeout=config.timeout_per_pattern,
+                    max_chunk_tokens=config.chunk_size,
+                    debug=debug,
+                    stream=False,
+                    model=model
+                )
+                
+                print(f"🔮 Running analysis for new patterns...")
+                result = orchestrator.orchestrate(
+                    transcript=transcript,
+                    video_title=cache_entry.title,
+                    video_duration_seconds=cache_entry.duration_seconds,
+                    video_info={"id": video_id}
+                )
+                
+                # Build pattern outputs
+                pattern_outputs = {
+                    pattern_name: pattern_result.combined_output
+                    for pattern_name, pattern_result in result.pattern_results.items()
+                }
+                
+                # Append to existing note
+                note_path = Path(cache_entry.markdown_path)
+                append_patterns_to_note(note_path, pattern_outputs, update_frontmatter=True)
+                
+                # Update cache
+                cache.append_patterns(video_id, new_patterns)
+                
+                print(f"✅ Appended {len(new_patterns)} new section(s) to {note_path.name}")
+                return 0
+            
+            else:
+                # DEFAULT: Skip existing
+                patterns = cache_entry.patterns_run
+                print(f"⏭️  SKIPPED: Note already exists for {video_id}")
+                print(f"   📄 Existing: {cache_entry.markdown_path}")
+                print(f"   📊 Patterns: {len(patterns)} ({', '.join(patterns[:3])}{'...' if len(patterns) > 3 else ''})")
+                print(f"   💡 Tip: Use --append to add patterns, --update to refresh metadata, or --force to re-run")
+                return 0
+        
+        if verbose:
+            print(f"🎬 Video ID: {video_id}")
+            print(f"📊 Mode: {mode}")
+            print(f"🤖 Model: {model}")
+            print(f"📁 Output: {output_dir}")
+        
+        print(f"📥 Extracting video: {video_id}")
+        
+        # Extract metadata and transcript
+        result = extract_metadata(
+            normalized_url,
+            cookies_browser=None,
+            extract_transcript=True,
+            transcript_lang='en'
+        )
+        
+        metadata = result['metadata']
+        transcript = result.get('transcript')
+        transcript_info = result.get('transcript_info', {})
+        
+        # Report transcript status
+        if transcript:
+            word_count = transcript_info.get('transcript_word_count', 0)
+            print(f"✅ Extracted transcript: {word_count} words")
+        else:
+            print("⚠️  Transcript not available")
+            if not args.no_analysis:
+                print("   Skipping AI analysis (no transcript)")
+                args.no_analysis = True
+        
+        # Determine patterns to run
+        patterns = None
+        
+        if args.no_analysis:
+            # Skip analysis
+            patterns = []
+        
+        elif mode == "quick":
+            # Quick mode: use configured patterns
+            patterns = config.quick_patterns
+            if verbose:
+                print(f"⚡ Quick mode: {len(patterns)} essential patterns")
+        
+        elif mode == "expert":
+            # Expert mode: use specified patterns
+            patterns = args.patterns
+            if verbose:
+                print(f"🔧 Expert mode: {len(patterns)} specified patterns")
+        
+        elif mode == "auto" or mode == "deep" or mode == "preview":
+            # Use pattern_optimizer
+            if not transcript:
+                print("❌ Cannot run auto-analysis without transcript", file=sys.stderr)
+                return 1
+            
+            recommendations = run_pattern_optimizer(transcript, debug)
+            
+            # Determine filtering
+            if mode == "deep":
+                min_priority = config.deep_min_priority
+                max_patterns = config.deep_max_patterns
+            else:  # auto or preview
+                min_priority = config.auto_min_priority
+                max_patterns = args.max_patterns if args.max_patterns else config.auto_max_patterns
+            
+            patterns = filter_patterns(recommendations, max_patterns, min_priority, debug)
+            
+            # Show recommendations if requested or in preview mode
+            if config.auto_show_recommendations or mode == "preview":
+                show_recommendations(recommendations, patterns)
+            
+            if mode == "preview":
+                print("🏁 Preview complete. Run without --preview to execute analysis.")
+                return 0
+        
+        # Run Fabric analysis if patterns specified
+        ai_analysis = None
+        if patterns and len(patterns) > 0 and transcript:
+            print(f"\n🔮 Running AI analysis with {len(patterns)} patterns...")
+            
+            # Import and run orchestrator
+            from lib.fabric_orchestrator import FabricOrchestrator
+            
+            orchestrator = FabricOrchestrator(
+                patterns=patterns,
+                timeout=config.timeout_per_pattern,
+                max_chunk_tokens=config.chunk_size,
+                debug=debug,
+                stream=False,
+                model=model
+            )
+            
+            result = orchestrator.orchestrate(
+                transcript=transcript,
+                video_title=metadata.get("title", "Untitled"),
+                video_duration_seconds=int(metadata.get("duration", 0)),
+                video_info={"id": video_id, **metadata}
+            )
+            
+            # Convert OrchestrationResult to dict[pattern_name -> output_text]
+            ai_analysis = {
+                pattern_name: pattern_result.combined_output
+                for pattern_name, pattern_result in result.pattern_results.items()
+            }
+        
+        # Generate and save markdown
+        from lib.formatter import generate_frontmatter, generate_markdown
+        from lib.filesystem import save_markdown
+        
+        # Merge transcript info into metadata
+        metadata.update(transcript_info)
+        
+        # Generate markdown
+        frontmatter = generate_frontmatter(metadata)
+        markdown_content = generate_markdown(
+            frontmatter=frontmatter,
+            metadata=metadata,
+            transcript=transcript,
+            ai_analysis=ai_analysis
+        )
+        
+        # Save to output directory
+        output_path = save_markdown(
+            content=markdown_content,
+            title=metadata.get("title", "Untitled"),
+            upload_date=metadata.get("upload_date", "19700101"),
+            output_dir=output_dir
+        )
+        
+        print(f"\n✅ Note saved: {output_path}")
+        
+        # ============================================================
+        # SAVE TO CACHE (V3.0)
+        # ============================================================
+        from datetime import datetime
+        
+        cache_entry = CacheEntry(
+            video_id=video_id,
+            video_url=normalized_url,
+            title=metadata.get("title", "Untitled"),
+            upload_date=metadata.get("upload_date", "19700101"),
+            duration_seconds=int(metadata.get("duration", 0)),
+            transcript_word_count=transcript_info.get('transcript_word_count', 0),
+            markdown_path=str(output_path),
+            last_updated=datetime.now().isoformat(),
+            patterns_run=patterns if patterns else [],
+            processing_history=[{
+                'timestamp': datetime.now().isoformat(),
+                'mode': mode,
+                'model': model,
+                'patterns_run': patterns if patterns else [],
+                'success': True
+            }],
+            chunks=None,  # Could store chunk info here
+            phase1_metadata=None  # Could store Phase 1 metadata here
+        )
+        
+        cache.save_cache(video_id, cache_entry)
+        
+        if verbose:
+            print(f"💾 Cached analysis for future runs")
+        
+        if config.open_in_editor:
+            import subprocess
+            subprocess.run(["open", str(output_path)])
+        
+        return 0
+    
+    except KeyboardInterrupt:
+        print("\n⚠️  Interrupted by user", file=sys.stderr)
+        return 130
+    
+    except Exception as e:
+        print(f"\n❌ Error: {e}", file=sys.stderr)
+        if args.debug if hasattr(args, 'debug') else False:
+            raise
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

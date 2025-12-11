@@ -1,0 +1,121 @@
+# yt-obsidian Configuration
+# Phase 1C: Fabric Integration Settings
+
+# Fabric Settings
+fabric:
+  # Command to run Fabric (default: fabric-ai)
+  command: "fabric-ai"
+  
+  # Default Fabric patterns to run
+  # These patterns will be applied to each enriched packet
+  patterns:
+    - "youtube_summary"
+    # - "extract_wisdom"
+  
+  # Join pattern: used to combine chunk outputs into coherent final output
+  # Set to null/empty to skip join phase (just concatenate chunks)
+  join_pattern: "join_chunks"
+  
+  # Timeout per Fabric pattern call in seconds
+  timeout: 120
+  
+  # Enable/disable Fabric analysis by default
+  # Can be overridden with --no-fabric or --fabric-patterns flags
+  enabled: true
+
+# Rate Limit Settings (for Groq API)
+rate_limits:
+  # Maximum retries on rate limit (429) errors
+  max_retries: 3
+  
+  # Base delay for exponential backoff (seconds)
+  base_delay: 5.0
+  
+  # Maximum delay between retries (seconds)
+  max_delay: 60.0
+  
+  # Delay between chunks to avoid hitting rate limits (seconds)
+  # Increase this if you're hitting rate limits frequently
+  inter_chunk_delay: 2.0
+  
+  # Multi-Model Fallback Strategy (NEW!)
+  # If primary model hits rate limit or daily quota, automatically try these
+  # Ordered by capability and quota availability
+  # 
+  # Strategy: Start with high TPM, fall back to others when exhausted
+  # This maximizes throughput by using different quota pools
+  fallback_models:
+    - "llama-3.3-70b-versatile"               # 12K TPM - best quality
+    - "moonshotai/kimi-k2-instruct-0905"      # 10K TPM - balanced
+    - "llama-3.1-8b-instant"                  # 6K TPM - fastest, use if others exhausted
+  
+  # Phase-specific model preferences (optional)
+  # Phase 1 (metadata extraction) - uses small samples, can use faster models
+  phase1_fallbacks:
+    - "llama-3.1-8b-instant"                  # Fast for small samples
+    - "moonshotai/kimi-k2-instruct-0905"      # Backup
+    - "llama-3.3-70b-versatile"               # Final fallback
+  
+  # Phase 2 (pattern analysis) - needs better quality for detailed analysis
+  phase2_fallbacks:
+    - "llama-3.3-70b-versatile"               # Best quality first
+    - "moonshotai/kimi-k2-instruct-0905"      # Good balance
+    - "llama-3.1-8b-instant"                  # Fast fallback
+
+# Chunking Settings
+chunking:
+  # Maximum tokens per chunk (comfortable for most LLM APIs)
+  max_chunk_tokens: 8000
+  
+  # Token overlap between consecutive chunks (for context continuity)
+  overlap_tokens: 200
+  
+  # Save intermediate chunk files (.fabric/ directory)
+  save_chunks: true
+
+# Output Settings
+output:
+  # Use slugified filenames (e.g., "2025-12-08_the_chinese_ai_iceberg.md")
+  # If false, uses sanitized titles with spaces (e.g., "2025-12-08 - The Chinese AI Iceberg.md")
+  use_slug_filenames: true
+  
+  # Include AI analysis sections in markdown output
+  include_ai_analysis: true
+  
+  # Keep .fabric/ temporary directory after processing
+  # Useful for debugging or re-running patterns without re-chunking
+  keep_temp_dir: true
+
+# Metadata Extraction (Phase 1)
+metadata:
+  # Patterns for global metadata extraction
+  summary_pattern: "create_micro_summary"
+  theme_pattern: "extract_main_idea"
+  topics_pattern: "extract_patterns"
+  
+  # Timeout for metadata extraction in seconds
+  timeout: 60
+
+# Transcript Settings (Phase 1B)
+transcript:
+  # Preferred language code (e.g., "en", "es", "pt")
+  # Leave empty to use video's default language
+  preferred_language: ""
+  
+  # Include auto-generated transcripts if manual not available
+  allow_auto_generated: true
+  
+  # Include transcript in markdown output
+  include_in_markdown: true
+
+# Advanced Settings
+advanced:
+  # Video ID for .fabric/ directory naming
+  # Options: "video_id" (YouTube ID) or "slugified_title"
+  fabric_dir_naming: "video_id"
+  
+  # Maximum retries for failed Fabric pattern calls
+  max_retries: 1
+  
+  # Show detailed progress during processing
+  verbose: false
