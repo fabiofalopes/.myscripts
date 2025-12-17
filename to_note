@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+#
+# to_note — append a shell command and its live output to an Obsidian Markdown note
+#
+# PURPOSE
+# -------
+# A tiny, reliable utility for personal command journaling inside an Obsidian vault.
+# You run a command as usual; the command executes normally in your terminal,
+# while both the command itself and its output are appended to a Markdown note
+# located inside your Obsidian vault.
+#
+# This tool is intentionally minimal:
+# - no custom command parsing
+# - no looping over subcommands
+# - one invocation = one recorded execution
+#
+# Shell syntax such as `;`, `&&`, pipes, and subshells is handled by the shell itself.
+#
+#
+# ENVIRONMENT
+# -----------
+#   OBSVAULT=/path/to/your/ObsidianVault
+#
+#
+# USAGE
+# -----
+#   to_note "$OBSVAULT/path/to/note.md" <command...>
+#
+# Examples:
+#   to_note "$OBSVAULT/scratch/test.md" echo "test"
+#   to_note "$OBSVAULT/system/linux.md" uname -a
+#   to_note "$OBSVAULT/ops/session.md" echo "one"; echo "two"; date
+#
+# Tip:
+#   alias tn=to_note
+#
+#
+# OUTPUT FORMAT (Markdown)
+# ------------------------
+# ### YYYY-MM-DD HH:MM:SS
+#
+# ```bash
+# $ <exact command as passed>
+# <command output>
+# ```
+#
+# ----
+#
+# Repeated calls keep appending to the same note.
+#
+#
+# DESIGN GOALS
+# ------------
+# - append-only (never overwrite)
+# - live terminal output (feels like a normal command)
+# - Markdown-native and Obsidian-friendly
+# - minimal, readable, future-proof
+#
+#
+# NOTES
+# -----
+# - The command is executed via `eval` so shell syntax works as expected.
+# - Both stdout and stderr are captured.
+# - Parent directories for the note are created automatically.
+#
+
+set -euo pipefail
+
+# ---- argument handling ------------------------------------------------------
+
+if [ "$#" -lt 2 ]; then
+  echo "usage: to_note \"\$OBSVAULT/path/to/note.md\" <command...>" >&2
+  exit 1
+fi
+
+file="$1"
+shift
+
+# Command exactly as provided after the note path
+cmd="$*"
+
+# ---- ensure destination exists ---------------------------------------------
+
+mkdir -p "$(dirname "$file")"
+
+# ---- append header and command ---------------------------------------------
+
+{
+  echo
+  echo "### $(date '+%Y-%m-%d %H:%M:%S')"
+  echo
+  echo '```bash'
+  echo "$ $cmd"
+  echo
+} >> "$file"
+
+# ---- run command: live output + append -------------------------------------
+
+eval "$cmd" 2>&1 | tee -a "$file"
+
+# ---- close markdown block ---------------------------------------------------
+
+{
+  echo
+  echo '```'
+  echo
+  echo '----'
+} >> "$file"
+
