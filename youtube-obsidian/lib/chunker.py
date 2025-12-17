@@ -7,12 +7,12 @@ This module orchestrates the chunking process:
 4. Estimate timestamps for each chunk
 """
 
+import json
 from pathlib import Path
 from typing import List, Dict, Optional
-import json
 
 from . import token_counter
-from .packet_builder import create_packet, EnrichedPacket
+from .packet_builder import create_packet, EnrichedPacket, VideoContext
 from .metadata_extractor import GlobalMetadata
 
 
@@ -39,7 +39,8 @@ class TranscriptChunker:
         video_title: str,
         video_duration_seconds: int,
         metadata: GlobalMetadata,
-        save_dir: Optional[Path] = None
+        save_dir: Optional[Path] = None,
+        video_info: Optional[Dict] = None
     ) -> List[EnrichedPacket]:
         """Chunk transcript and create enriched packets.
         
@@ -56,11 +57,18 @@ class TranscriptChunker:
             video_duration_seconds: Total video duration in seconds
             metadata: Global metadata from Phase 1
             save_dir: Optional directory to save chunks
+            video_info: Optional dict from extractor with YouTube metadata (V4.0)
         
         Returns:
             List[EnrichedPacket]: Enriched packets ready for Fabric processing
         """
         print("✂️  Chunking transcript...")
+        
+        # Create VideoContext if video_info provided (V4.0)
+        video_context = None
+        if video_info:
+            video_context = VideoContext.from_video_info(video_info)
+            print(f"   📺 Video context: {video_context.channel_name} | {len(video_context.tags)} tags")
         
         # Step 1: Analyze transcript
         total_tokens = token_counter.count_tokens(transcript)
@@ -76,7 +84,8 @@ class TranscriptChunker:
                 video_title,
                 video_duration_seconds,
                 metadata,
-                total_tokens
+                total_tokens,
+                video_context=video_context
             )
         else:
             # Calculate optimal chunk size
@@ -110,7 +119,8 @@ class TranscriptChunker:
             packets = self._create_packets_from_chunks(
                 chunks,
                 video_title,
-                metadata
+                metadata,
+                video_context=video_context
             )
         
         # Step 6: Save if requested
@@ -125,7 +135,8 @@ class TranscriptChunker:
         video_title: str,
         video_duration_seconds: int,
         metadata: GlobalMetadata,
-        token_count: int
+        token_count: int,
+        video_context: Optional[VideoContext] = None
     ) -> List[EnrichedPacket]:
         """Create a single enriched packet (no chunking needed).
         
@@ -135,6 +146,7 @@ class TranscriptChunker:
             video_duration_seconds: Video duration
             metadata: Global metadata
             token_count: Pre-calculated token count
+            video_context: Optional VideoContext with YouTube metadata (V4.0)
         
         Returns:
             List with single EnrichedPacket
@@ -152,7 +164,8 @@ class TranscriptChunker:
                 token_counter._seconds_to_timestamp(video_duration_seconds)
             ),
             transcript_segment=transcript,
-            token_count=token_count
+            token_count=token_count,
+            video_context=video_context
         )
         
         return [packet]
@@ -161,7 +174,8 @@ class TranscriptChunker:
         self,
         chunks: List[Dict],
         video_title: str,
-        metadata: GlobalMetadata
+        metadata: GlobalMetadata,
+        video_context: Optional[VideoContext] = None
     ) -> List[EnrichedPacket]:
         """Create enriched packets from chunks.
         
@@ -169,6 +183,7 @@ class TranscriptChunker:
             chunks: List of chunk dicts from token_counter
             video_title: Video title
             metadata: Global metadata
+            video_context: Optional VideoContext with YouTube metadata (V4.0)
         
         Returns:
             List[EnrichedPacket]: Enriched packets
@@ -186,7 +201,8 @@ class TranscriptChunker:
                 total_chunks=total_chunks,
                 timestamp_range=chunk['timestamp_range'],
                 transcript_segment=chunk['text'],
-                token_count=chunk['token_count']
+                token_count=chunk['token_count'],
+                video_context=video_context
             )
             packets.append(packet)
         
@@ -237,7 +253,8 @@ def chunk_transcript(
     metadata: GlobalMetadata,
     max_chunk_tokens: int = 8000,
     overlap_tokens: int = 200,
-    save_dir: Optional[Path] = None
+    save_dir: Optional[Path] = None,
+    video_info: Optional[Dict] = None
 ) -> List[EnrichedPacket]:
     """Convenience function for transcript chunking.
     
@@ -249,6 +266,7 @@ def chunk_transcript(
         max_chunk_tokens: Max tokens per chunk (default: 8000)
         overlap_tokens: Overlap between chunks (default: 200)
         save_dir: Optional save directory
+        video_info: Optional dict from extractor with YouTube metadata (V4.0)
     
     Returns:
         List[EnrichedPacket]: Enriched packets ready for processing
@@ -263,5 +281,6 @@ def chunk_transcript(
         video_title=video_title,
         video_duration_seconds=video_duration_seconds,
         metadata=metadata,
-        save_dir=save_dir
+        save_dir=save_dir,
+        video_info=video_info
     )

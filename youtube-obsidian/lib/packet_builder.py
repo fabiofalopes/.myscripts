@@ -5,8 +5,117 @@ contextual metadata that helps AI models understand position and broader
 context when processing segments of longer content.
 """
 
-from dataclasses import dataclass
-from typing import Tuple, Optional
+from dataclasses import dataclass, field
+from typing import Tuple, Optional, List
+
+
+@dataclass
+class VideoContext:
+    """Raw YouTube metadata context for packet enrichment.
+    
+    This provides YouTube-specific context that helps AI models:
+    - Correctly spell technical terms (from tags)
+    - Attribute speaker/creator context (from channel)
+    - Understand video focus (from description excerpt)
+    
+    Attributes:
+        video_id: YouTube video ID
+        video_url: Full YouTube URL
+        channel_name: Channel/creator name
+        channel_url: Channel URL (optional)
+        upload_date: Upload date as YYYY-MM-DD
+        tags: List of video tags (first 10)
+        description_excerpt: First ~150 words of description
+        duration_formatted: Duration as HH:MM:SS
+    """
+    video_id: str
+    video_url: str
+    channel_name: str
+    upload_date: str
+    tags: List[str] = field(default_factory=list)
+    description_excerpt: str = ""
+    duration_formatted: str = ""
+    channel_url: str = ""
+    
+    @classmethod
+    def from_video_info(cls, video_info: dict, max_tags: int = 10, description_words: int = 150) -> "VideoContext":
+        """Create VideoContext from extractor's video_info dict.
+        
+        Args:
+            video_info: Dict from extractor.extract_metadata()
+            max_tags: Maximum number of tags to include (default: 10)
+            description_words: Max words from description (default: 150)
+        
+        Returns:
+            VideoContext: Populated context object
+        """
+        # Extract tags (limit to max_tags)
+        tags = video_info.get('tags', []) or []
+        if isinstance(tags, list):
+            tags = tags[:max_tags]
+        else:
+            tags = []
+        
+        # Extract description excerpt (first N words)
+        description = video_info.get('description', '') or ''
+        words = description.split()
+        if len(words) > description_words:
+            description_excerpt = ' '.join(words[:description_words]) + '...'
+        else:
+            description_excerpt = description
+        
+        # Format duration
+        duration_seconds = video_info.get('duration', 0) or 0
+        duration_formatted = _seconds_to_timestamp(duration_seconds)
+        
+        # Format upload date
+        upload_date_raw = video_info.get('upload_date', '') or ''
+        if len(upload_date_raw) == 8:  # YYYYMMDD format
+            upload_date = f"{upload_date_raw[:4]}-{upload_date_raw[4:6]}-{upload_date_raw[6:8]}"
+        else:
+            upload_date = upload_date_raw
+        
+        return cls(
+            video_id=video_info.get('id', ''),
+            video_url=video_info.get('webpage_url', video_info.get('url', '')),
+            channel_name=video_info.get('channel', video_info.get('uploader', 'Unknown')),
+            channel_url=video_info.get('channel_url', video_info.get('uploader_url', '')),
+            upload_date=upload_date,
+            tags=tags,
+            description_excerpt=description_excerpt,
+            duration_formatted=duration_formatted
+        )
+    
+    def to_preamble_section(self) -> str:
+        """Generate VIDEO CONTEXT section for preamble.
+        
+        Returns:
+            str: Formatted VIDEO CONTEXT block
+        """
+        tags_str = ', '.join(self.tags) if self.tags else 'None'
+        
+        lines = [
+            "VIDEO CONTEXT:",
+            f"- Channel: {self.channel_name}",
+            f"- Published: {self.upload_date}",
+            f"- Duration: {self.duration_formatted}",
+            f"- Tags: {tags_str}",
+        ]
+        
+        if self.description_excerpt:
+            # Truncate very long excerpts for display
+            excerpt = self.description_excerpt[:300] + '...' if len(self.description_excerpt) > 300 else self.description_excerpt
+            lines.append(f"- Description: {excerpt}")
+        
+        return '\n'.join(lines)
+
+
+def _seconds_to_timestamp(seconds: int) -> str:
+    """Convert seconds to HH:MM:SS format."""
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
 @dataclass
@@ -14,7 +123,8 @@ class EnrichedPacket:
     """Context-enriched chunk for Fabric AI processing.
     
     An enriched packet contains a chunk of transcript plus metadata about:
-    - Global context (video title, summary, key topics)
+    - Video context (channel, tags, description) - NEW in V4.0
+    - Global context (video title, summary, key topics from Phase 1 AI)
     - Position in sequence (beginning/middle/end)
     - Temporal context (timestamp range)
     
@@ -32,9 +142,10 @@ class EnrichedPacket:
         timestamp_range: Tuple of (start_time, end_time) as HH:MM:SS strings
         transcript_segment: The actual chunk text content
         token_count: Number of tokens in transcript_segment
+        video_context: Optional VideoContext with YouTube metadata (V4.0)
     """
     
-    # Global context metadata
+    # Global context metadata (from Phase 1 AI analysis)
     video_title: str
     video_summary: str
     key_topics: str
@@ -49,6 +160,9 @@ class EnrichedPacket:
     # Content
     transcript_segment: str
     token_count: int = 0
+    
+    # YouTube metadata context (V4.0 - optional for backward compatibility)
+    video_context: Optional[VideoContext] = None
     
     def to_fabric_input(self) -> str:
         """Format packet as Fabric-compatible input.
@@ -71,7 +185,8 @@ class EnrichedPacket:
         """Generate contextual preamble header.
         
         Creates a structured metadata block that provides:
-        - CONTENT CONTEXT: Overall video information
+        - VIDEO CONTEXT: YouTube metadata (channel, tags, description) - V4.0
+        - CONTENT CONTEXT: AI-analyzed overview
         - CHUNK INFORMATION: Position and temporal details
         
         Returns:
@@ -82,18 +197,30 @@ class EnrichedPacket:
         # Format chunk position display
         chunk_display = f"chunk {self.chunk_index + 1} of {self.total_chunks}"
         
-        return f"""---
-CONTENT CONTEXT:
-- Source: {self.video_title}
+        # Build preamble sections
+        sections = ["---"]
+        
+        # Add VIDEO CONTEXT if available (V4.0)
+        if self.video_context:
+            sections.append(self.video_context.to_preamble_section())
+            sections.append("")  # Blank line between sections
+        
+        # Add CONTENT CONTEXT (AI-analyzed)
+        sections.append(f"""CONTENT CONTEXT:
+- Title: {self.video_title}
 - Overview: {self.video_summary}
-- Key Topics: {self.key_topics}
-
+- Key Topics: {self.key_topics}""")
+        
+        # Add CHUNK INFORMATION
+        sections.append(f"""
 CHUNK INFORMATION:
 - Position: {self.position} ({chunk_display})
 - Timestamp Range: {self.timestamp_range[0]} - {self.timestamp_range[1]}
-- Processing Note: {position_note}
-
----"""
+- Processing Note: {position_note}""")
+        
+        sections.append("\n---")
+        
+        return '\n'.join(sections)
     
     def _get_position_note(self) -> str:
         """Generate position-specific processing instruction.
@@ -173,7 +300,8 @@ def create_packet(
     total_chunks: int,
     timestamp_range: Tuple[str, str],
     transcript_segment: str,
-    token_count: Optional[int] = None
+    token_count: Optional[int] = None,
+    video_context: Optional[VideoContext] = None
 ) -> EnrichedPacket:
     """Factory function to create an enriched packet.
     
@@ -190,6 +318,7 @@ def create_packet(
         timestamp_range: (start, end) timestamps as HH:MM:SS
         transcript_segment: Actual text content
         token_count: Optional pre-calculated token count
+        video_context: Optional VideoContext with YouTube metadata (V4.0)
     
     Returns:
         EnrichedPacket: Configured packet ready for Fabric processing
@@ -210,5 +339,6 @@ def create_packet(
         position=position,
         timestamp_range=timestamp_range,
         transcript_segment=transcript_segment,
-        token_count=final_token_count
+        token_count=final_token_count,
+        video_context=video_context
     )

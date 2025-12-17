@@ -594,3 +594,96 @@ youtube-obsidian/
 - Or read full `CONTEXT.md` for complete history
 - Project now part of managed `.myscripts` repository
 
+
+---
+
+### 2025-12-13: V4.0 Enhanced Workflow Specification - COMPLETE
+
+**Major Achievement**: Comprehensive specification unifying packet enrichment with iterative workflow vision
+
+**Context**: 
+- User identified that packets lack YouTube metadata (channel, tags, description)
+- Vision expanded to include dynamic pattern discovery and vault-wide operations
+- Goal: Transform `yt` from "one-shot tool" to "content synthesis engine"
+
+**Specification Created**: `docs/development/PACKET_ENRICHMENT_SPEC.md` (700+ lines)
+
+**Three-Part Architecture**:
+
+1. **PART I: Packet Enrichment (Foundation)**
+   - Phase A: Enhanced packet context with VideoContext dataclass
+   - Phase B: Transcript refinement pipeline (typo correction, formatting)
+   - Phase C: Always-run pattern infrastructure
+
+2. **PART II: Enhanced Iterative Workflow**
+   - Phase D: Pattern discovery (`yt patterns` command family)
+   - Phase E: Iterative pattern application (`yt status`, `yt add`)
+   - Phase F: Vault-aware operations (`yt vault stats`, bulk apply)
+   - Phase G: Content synthesis engine (future vision)
+
+3. **PART III: Unified Implementation Plan**
+   - 6-sprint roadmap (Foundation → Discovery → Iterative → Refinement → Vault → Polish)
+   - Comprehensive testing strategy
+   - Enhanced configuration schema (v4.0)
+   - Full command reference
+
+**Key New Concepts**:
+
+1. **Pattern Discovery System**:
+   ```bash
+   yt patterns                    # List all 262+ patterns
+   yt patterns search "extract"   # Search patterns
+   yt patterns describe extract_wisdom  # Show pattern details
+   yt patterns suggest --content-type podcast  # Smart suggestions
+   ```
+
+2. **Iterative Workflow Enhancement**:
+   ```bash
+   yt status VIDEO_ID             # See what's been analyzed
+   yt add VIDEO_ID --patterns P1  # Add patterns incrementally
+   yt add VIDEO_ID --suggest      # Use smart suggestions
+   ```
+
+3. **Vault-Aware Operations**:
+   ```bash
+   yt vault stats                 # Vault-wide analytics
+   yt vault list --missing PATTERN  # Find gaps
+   yt vault apply PATTERN --all   # Bulk operations
+   ```
+
+4. **Enhanced Packet Context**:
+   - VideoContext dataclass with channel, tags, description excerpt
+   - ~200 token overhead per chunk (acceptable)
+   - Full YouTube metadata flows to each Fabric call
+
+**Files Created**:
+- Enhanced `docs/development/PACKET_ENRICHMENT_SPEC.md` (unified specification)
+
+**New Modules Planned**:
+- `lib/pattern_discovery.py` - Pattern discovery interface
+- `lib/vault_manager.py` - Vault-wide operations
+- `lib/transcript_cache.py` - Efficient transcript caching
+- Enhanced `lib/cache_manager.py` - New fields for iterative workflow
+
+**Implementation Roadmap (6 Sprints)**:
+| Sprint | Focus | Time | Priority |
+|--------|-------|------|----------|
+| 1 | Packet Enrichment | 2-3h | CRITICAL |
+| 2 | Pattern Discovery | 3-4h | HIGH |
+| 3 | Iterative Workflow | 4-5h | HIGH |
+| 4 | Transcript Refinement | 4-6h | MEDIUM |
+| 5 | Vault Operations | 4-5h | MEDIUM |
+| 6 | Always-Run & Polish | 2-3h | LOW |
+
+**Vision Statement**:
+> "More than just getting information, we're trying to really get a lot of perspective, a lot of thinking, a lot of creative writing... the commentary, analysis, and content distillation."
+
+**Status**: 📋 SPECIFICATION COMPLETE - Ready for implementation
+
+**Next Steps**:
+1. Implement Sprint 1 (Packet Enrichment) - Core foundation
+2. Implement Sprint 2 (Pattern Discovery) - Enables dynamic workflow
+3. Then iteratively add remaining features
+
+**Key Decision**: Both specs (packet enrichment + enhanced workflow) will be implemented together, starting with the foundation (Sprint 1) and building up.
+

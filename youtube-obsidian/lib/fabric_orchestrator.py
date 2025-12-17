@@ -208,7 +208,8 @@ class FabricOrchestrator:
             video_duration_seconds=video_duration_seconds,
             metadata=metadata,
             max_chunk_tokens=self.max_chunk_tokens,
-            save_dir=self.save_dir
+            save_dir=self.save_dir,
+            video_info=video_info  # V4.0: Pass video_info for VideoContext enrichment
         )
         
         chunk_time = time.time() - chunk_start
@@ -671,7 +672,8 @@ def orchestrate_fabric_analysis(
     save_dir: Optional[Path] = None,
     debug: bool = False,
     stream: bool = False,
-    model: Optional[str] = None
+    model: Optional[str] = None,
+    video_info: Optional[Dict] = None
 ) -> OrchestrationResult:
     """Convenience function for Fabric orchestration.
     
@@ -687,6 +689,7 @@ def orchestrate_fabric_analysis(
         debug: Enable debug mode with detailed output
         stream: Enable streaming mode to see Fabric output in real-time
         model: Optional LLM model override (e.g., "llama-4-scout")
+        video_info: Optional dict from extractor with YouTube metadata (V4.0)
     
     Returns:
         OrchestrationResult: Complete orchestration results
@@ -705,5 +708,6 @@ def orchestrate_fabric_analysis(
     return orchestrator.orchestrate(
         transcript=transcript,
         video_title=video_title,
-        video_duration_seconds=video_duration_seconds
+        video_duration_seconds=video_duration_seconds,
+        video_info=video_info  # V4.0: Pass video_info for VideoContext enrichment
     )

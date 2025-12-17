@@ -389,6 +389,57 @@ vim ~/.myscripts/my-workflow
 echo "test input" | ~/.myscripts/my-workflow
 ```
 
+## Obsidian Note Enhancement Patterns
+
+### obsidian_note_title
+**Purpose**: Generate natural, human-readable titles for Obsidian notes
+
+**Input**: Raw note content
+
+**Output**: Single title string (50-80 characters, properly capitalized)
+
+**Example**:
+```bash
+cat note.md | fabric -p obsidian_note_title
+```
+
+---
+
+### obsidian_frontmatter_gen
+**Purpose**: Generate complete YAML frontmatter metadata for Obsidian notes
+
+**Input**: Raw note content
+
+**Output**: Complete YAML frontmatter block with:
+- title
+- aliases (alternative names for linking)
+- tags (2-5 relevant categories)
+- created (date in YYYY-MM-DD)
+- type (idea, reference, project, meeting, journal, article, snippet, log)
+- status (draft, active, review, archived, permanent)
+- summary (one-line description)
+
+**Example**:
+```bash
+cat note.md | fabric -p obsidian_frontmatter_gen
+```
+
+---
+
+### obsidian_note_polish
+**Purpose**: Combined pattern - generates both title and frontmatter in one pass
+
+**Input**: Raw note content
+
+**Output**: Formatted output with both title and complete frontmatter block
+
+**Example**:
+```bash
+cat note.md | fabric -p obsidian_note_polish
+```
+
+---
+
 ## Script Examples Using These Patterns
 
 ### txrefine
@@ -398,6 +449,16 @@ voicenote | txrefine
 # Stage 1: Raw → transcript-analyzer → Analysis
 # Stage 2: (Raw + Analysis) → transcript-refiner → Refined output
 ```
+
+### obsidian-polish
+Obsidian note enhancement workflow:
+```bash
+pbpaste | obsidian-polish           # Combined mode (default)
+cat note.md | obsidian-polish -t    # Title only
+cat note.md | obsidian-polish -f    # Frontmatter only
+```
+
+**See [OBSIDIAN-WORKFLOW.md](./OBSIDIAN-WORKFLOW.md) for complete documentation.**
 
 ---
 
