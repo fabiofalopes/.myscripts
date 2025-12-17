@@ -1,0 +1,95 @@
+# Kali-style Zsh Enhancement Snippet
+# Source this from your ~/.zshrc for enhanced completion experience
+#
+# Add to end of ~/.zshrc:
+#   source ~/.myscripts/shell-enhancement/config/.zshrc.snippet
+
+# ============================================
+# COMPLETION SYSTEM ENHANCEMENT
+# ============================================
+
+# Menu selection - use arrow keys to navigate completions
+zstyle ':completion:*:*:*:*:*' menu select
+
+# Case-insensitive matching (ls d<TAB> finds Downloads)
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+
+# Colored completion - uses LS_COLORS
+zstyle ':completion:*:default' list-colors ${(s.:.)LS_COLORS}
+
+# Group completions by type
+zstyle ':completion:*' group-name ''
+zstyle ':completion:*:descriptions' format '%F{yellow}-- %d --%f'
+zstyle ':completion:*:warnings' format '%F{red}No matches for: %d%f'
+
+# Verbose - show descriptions
+zstyle ':completion:*' verbose true
+
+# Auto-rehash - find newly installed commands immediately
+zstyle ':completion:*' rehash true
+
+# Completion caching for slow completers (apt, brew, etc.)
+zstyle ':completion:*' use-cache yes
+zstyle ':completion:*' cache-path ~/.zsh/cache
+
+# Process completion for kill
+zstyle ':completion:*:*:kill:*:processes' list-colors '=(#b) #([0-9]#)*=0=01;31'
+zstyle ':completion:*:kill:*' command 'ps -u $USER -o pid,%cpu,tty,cputime,cmd'
+
+# ============================================
+# AUTOSUGGESTION SETTINGS
+# ============================================
+
+# Suggestion color (grey, visible but not distracting)
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
+
+# Strategy: history first, then completion
+ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+
+# ============================================
+# SYNTAX HIGHLIGHTING STYLES (Kali-inspired)
+# ============================================
+
+# Only set if syntax highlighting is loaded
+if (( ${+ZSH_HIGHLIGHT_STYLES} )); then
+    ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets pattern)
+    
+    ZSH_HIGHLIGHT_STYLES[default]=none
+    ZSH_HIGHLIGHT_STYLES[unknown-token]=fg=red,bold
+    ZSH_HIGHLIGHT_STYLES[reserved-word]=fg=cyan,bold
+    ZSH_HIGHLIGHT_STYLES[command]=fg=green
+    ZSH_HIGHLIGHT_STYLES[builtin]=fg=green
+    ZSH_HIGHLIGHT_STYLES[alias]=fg=green
+    ZSH_HIGHLIGHT_STYLES[function]=fg=green
+    ZSH_HIGHLIGHT_STYLES[path]=fg=white,underline
+    ZSH_HIGHLIGHT_STYLES[globbing]=fg=blue,bold
+    ZSH_HIGHLIGHT_STYLES[single-hyphen-option]=fg=cyan
+    ZSH_HIGHLIGHT_STYLES[double-hyphen-option]=fg=cyan
+    ZSH_HIGHLIGHT_STYLES[single-quoted-argument]=fg=yellow
+    ZSH_HIGHLIGHT_STYLES[double-quoted-argument]=fg=yellow
+    ZSH_HIGHLIGHT_STYLES[redirection]=fg=magenta,bold
+    ZSH_HIGHLIGHT_STYLES[comment]=fg=black,bold
+fi
+
+# ============================================
+# USEFUL KEY BINDINGS
+# ============================================
+
+# Accept autosuggestion with Ctrl+Space (alternative to right arrow)
+bindkey '^ ' autosuggest-accept 2>/dev/null || true
+
+# Ctrl+U - delete line before cursor (like bash)
+bindkey '^U' backward-kill-line
+
+# Ctrl+Arrow - move by word
+bindkey '^[[1;5C' forward-word   # Ctrl+Right
+bindkey '^[[1;5D' backward-word  # Ctrl+Left
+
+# History expansion on space
+bindkey ' ' magic-space
+
+# ============================================
+# ENSURE CACHE DIRECTORY EXISTS
+# ============================================
+
+[[ -d ~/.zsh/cache ]] || mkdir -p ~/.zsh/cache
