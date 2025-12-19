@@ -5,6 +5,7 @@
 # Usage:
 #   obsidian-polish note.md                    # Edit file in-place (with backup)
 #   obsidian-polish note.md --no-backup        # Edit without backup
+#   obsidian-polish note.md --rename-file      # Rename file based on title
 #   obsidian-polish note.md -o output.md       # Save to new file
 #   cat note.md | obsidian-polish              # Pipe mode (stdout)
 #   pbpaste | obsidian-polish                  # Clipboard mode
@@ -56,6 +57,11 @@ print_warning() {
     echo -e "${YELLOW}⚠${NC} $1"
 }
 
+# Slugify function for filenames
+slugify() {
+    echo "$1" | iconv -t ascii//TRANSLIT | sed -E 's/[^a-zA-Z0-9]+/-/g' | sed -E 's/^-+|-+$//g' | tr '[:upper:]' '[:lower:]'
+}
+
 show_help() {
     echo -e "${BOLD}Obsidian Note Polish Workflow${NC}"
     echo ""
@@ -63,6 +69,7 @@ show_help() {
     echo "  ${BOLD}File Editing Mode:${NC}"
     echo "    obsidian-polish note.md                  # Edit in-place (creates backup)"
     echo "    obsidian-polish note.md --no-backup      # Edit without backup"
+    echo "    obsidian-polish note.md -r               # Rename file based on title"
     echo "    obsidian-polish note.md -o output.md     # Save to new file"
     echo ""
     echo "  ${BOLD}Pipe Mode:${NC}"
@@ -72,6 +79,7 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  -o, --output FILE       Save to different file"
+    echo "  -r, --rename-file       Rename file based on generated title (slugified)"
     echo "  --no-backup             Don't create .bak file (for in-place edit)"
     echo "  -t, --title-only        Generate only title"
     echo "  -f, --frontmatter-only  Generate only frontmatter"
@@ -85,7 +93,8 @@ show_help() {
     echo ""
     echo "Examples:"
     echo "  obsidian-polish meeting-notes.md          # Smart edit with backup"
-    echo "  obsidian-polish draft.md --no-backup -y   # Quick edit, no prompts"
+    echo "  obsidian-polish draft.md -r -y            # Edit, rename, no prompts"
+    echo "  obsidian-polish draft.md --no-backup      # Quick edit without backup"
     echo "  pbpaste | obsidian-polish                 # Review before applying"
     echo ""
     exit 0
@@ -98,6 +107,7 @@ MODE="combined"
 NO_BACKUP=false
 AUTO_YES=false
 EDIT_IN_PLACE=false
+RENAME_FILE=false
 
 # Check if first argument is a file (file editing mode)
 if [ $# -gt 0 ] && [ -f "$1" ]; then
@@ -115,6 +125,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-backup)
             NO_BACKUP=true
+            shift
+            ;;
+        -r|--rename-file)
+            RENAME_FILE=true
             shift
             ;;
         -y|--yes)
@@ -140,6 +154,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Validate flag combinations
+if [ "$RENAME_FILE" = true ] && [ -n "$OUTPUT_FILE" ]; then
+    print_warning "--rename-file (-r) is ignored when using -o/--output"
+fi
+
+if [ "$RENAME_FILE" = true ] && [ "$MODE" = "frontmatter-only" ]; then
+    print_warning "--rename-file (-r) requires title generation (ignored with -f/--frontmatter-only)"
+fi
+
 echo -e "${BOLD}${BLUE}╔════════════════════════════════════════╗${NC}"
 echo -e "${BOLD}${BLUE}║   Obsidian Note Polish Workflow      ║${NC}"
 echo -e "${BOLD}${BLUE}╚════════════════════════════════════════╝${NC}\n"
@@ -160,9 +183,12 @@ else
     print_error "No input provided."
     echo ""
     echo -e "${YELLOW}Usage:${NC}"
-    echo -e "  ${DIM}obsidian-polish note.md${NC}       # Edit file"
-    echo -e "  ${DIM}cat note.md | obsidian-polish${NC} # Pipe mode"
-    echo -e "  ${DIM}pbpaste | obsidian-polish${NC}     # Clipboard"
+    echo -e "  ${DIM}obsidian-polish note.md${NC}        # Edit file"
+    echo -e "  ${DIM}obsidian-polish note.md -r${NC}     # Edit + rename"
+    echo -e "  ${DIM}cat note.md | obsidian-polish${NC}  # Pipe mode"
+    echo -e "  ${DIM}pbpaste | obsidian-polish${NC}      # Clipboard"
+    echo ""
+    echo -e "${DIM}Use ${NC}${BOLD}obsidian-polish --help${NC}${DIM} for all options${NC}"
     echo ""
     exit 1
 fi
@@ -334,6 +360,49 @@ if [ "$EDIT_IN_PLACE" = true ]; then
     # Write enhanced content
     echo -e "$ENHANCED_NOTE" > "$INPUT_FILE"
     print_success "File updated: $INPUT_FILE"
+    
+    # Rename file if requested and we have a title
+    if [ "$RENAME_FILE" = true ] && [ -n "$TITLE" ]; then
+        SLUGIFIED_TITLE=$(slugify "$TITLE")
+        
+        # Validate slugified title
+        if [ -z "$SLUGIFIED_TITLE" ] || [ "$SLUGIFIED_TITLE" = "-" ]; then
+            print_warning "Title cannot be converted to valid filename: '$TITLE'"
+            print_status "Using timestamp-based name instead"
+            SLUGIFIED_TITLE="note-$(date +%Y%m%d-%H%M%S)"
+        fi
+        
+        # Truncate to prevent filesystem issues
+        if [ ${#SLUGIFIED_TITLE} -gt 100 ]; then
+            SLUGIFIED_TITLE="${SLUGIFIED_TITLE:0:100}"
+            print_warning "Title truncated to 100 characters for filename"
+        fi
+        
+        DIR_NAME=$(dirname "$INPUT_FILE")
+        NEW_FILE="${DIR_NAME}/${SLUGIFIED_TITLE}.md"
+        
+        # Check if target already exists
+        if [ -f "$NEW_FILE" ] && [ "$NEW_FILE" != "$INPUT_FILE" ]; then
+            print_warning "Target file already exists: $NEW_FILE"
+            if [ "$AUTO_YES" = false ]; then
+                echo -e "${YELLOW}Overwrite? [y/N]:${NC} "
+                read -r CONFIRM
+                if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+                    print_status "Rename cancelled"
+                    NEW_FILE="$INPUT_FILE"
+                fi
+            else
+                print_status "Overwriting existing file (auto-yes mode)"
+            fi
+        fi
+        
+        # Rename if different
+        if [ "$NEW_FILE" != "$INPUT_FILE" ]; then
+            mv "$INPUT_FILE" "$NEW_FILE"
+            print_success "Renamed to: $NEW_FILE"
+            INPUT_FILE="$NEW_FILE"
+        fi
+    fi
     
     # Show preview of changes
     echo -e "\n${DIM}Updated file preview:${NC}"

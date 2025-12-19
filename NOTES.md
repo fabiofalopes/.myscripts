@@ -112,3 +112,13 @@ This pattern helps you:
 - Plan testing strategies
 
 **Location**: `fabric-custom-patterns/workflow-architect/`
+
+## Obsidian symlinks + hot reload
+
+Cheat sheet + context:
+
+- `~/.myscripts/docs/obsidian-symlinks-cheatsheet.md`
+- `~/.myscripts/docs/obsidian-symlinks-and-hot-reload.md`
+
+Session handoff log:
+- `~/.myscripts/docs/obsidian-symlinks-session-handoff-2025-12-19.md`
