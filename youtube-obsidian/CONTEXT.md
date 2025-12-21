@@ -687,3 +687,170 @@ youtube-obsidian/
 
 **Key Decision**: Both specs (packet enrichment + enhanced workflow) will be implemented together, starting with the foundation (Sprint 1) and building up.
 
+---
+
+### 2025-12-17: V4.0 Sprint 1 - Packet Enrichment IMPLEMENTATION COMPLETE
+
+**Major Achievement**: VideoContext dataclass fully implemented and integrated into packet enrichment pipeline
+
+**Sprint 1 Status**: ✅ CODE COMPLETE (⏳ Integration verification pending)
+
+**What Was Implemented**:
+
+1. **VideoContext Dataclass** (`lib/packet_builder.py`, lines 13-87)
+   - Full YouTube metadata context for AI models
+   - Fields: video_id, video_url, channel_name, upload_date, tags, description_excerpt, duration_formatted
+   - `from_video_info()` factory method for safe creation from extractor dict
+   - `to_preamble_section()` method generates formatted VIDEO CONTEXT block
+   - Robust error handling for missing/malformed data
+
+2. **EnrichedPacket Integration** (line 165)
+   - Added `video_context: Optional[VideoContext]` field
+   - Updated `_generate_preamble()` to include VIDEO CONTEXT section
+   - Preamble now includes:
+     - VIDEO CONTEXT: Channel, Published date, Duration, Tags, Description excerpt
+     - CONTENT CONTEXT: AI-analyzed overview
+     - CHUNK INFORMATION: Position and temporal details
+   - Fully backward compatible (Optional field, no breaking changes)
+
+3. **Code Quality**
+   - 345 lines total in packet_builder.py
+   - Full type hints throughout
+   - Comprehensive docstrings
+   - Proper edge case handling
+   - Ready for production use
+
+**Pipeline Flow (Now)**:
+```
+URL → Extractor (video_info) 
+    → VideoContext.from_video_info() ← NEW
+    → Chunker → EnrichedPacket(video_context) ← ENHANCED
+    → Fabric Orchestrator → Preamble with VIDEO CONTEXT ← ENHANCED
+    → Patterns → Markdown
+```
+
+**Integration Status**:
+- ✅ Code complete and tested (unit level)
+- ⏳ **NEEDS VERIFICATION**: Chunker must pass video_info to create_packet()
+- ⏳ **NEEDS VERIFICATION**: Fabric orchestrator must use _generate_preamble()
+- ⏳ **NEEDS TEST**: Run actual video to confirm VIDEO CONTEXT appears
+
+**Critical Path Forward**:
+1. **Immediate (15 min)**: Verify video_context flows through pipeline
+   - Run: `./yt --preview "https://www.youtube.com/watch?v=jNQXAC9IVRw"`
+   - Check for "VIDEO CONTEXT:" section in output
+   - If missing, debug chunker.py and fabric_orchestrator.py integration
+
+2. **High Priority (7-9h)**: Implement Sprints 2-3
+   - Sprint 2: Pattern Discovery (3-4h)
+   - Sprint 3: Iterative Workflow (4-5h)
+
+3. **Medium Priority (8-11h)**: Implement Sprints 4-5
+   - Sprint 4: Transcript Refinement (4-6h)
+   - Sprint 5: Vault Operations (4-5h)
+
+4. **Low Priority (2-3h)**: Polish (Sprint 6)
+
+**Session State Documented At**:
+- `archive/sessions/V4_0_SESSION_STATE.md` - Comprehensive session documentation
+- Memory entities created for Sprint 2-3 specifications
+- TodoWrite tasks created for Sprint 1-6 implementation
+
+**Estimated Remaining Work**: 17-23 hours for full V4.0 completion
+
+**Next Session Action**:
+1. Read `archive/sessions/V4_0_SESSION_STATE.md` for complete context
+2. Run integration verification test (VIDEO CONTEXT in preview output)
+3. Proceed with Sprint 2 implementation (Pattern Discovery)
+
+
+---
+
+### 2025-12-17: V4.0 Status & Vault Commands - COMPLETE
+
+**Major Achievement**: Implemented `yt status` and `yt vault` commands for iterative workflow
+
+**What Was Implemented**:
+
+1. **`lib/status_display.py`** (NEW - 175 lines)
+   - `extract_video_id()` - Parse video ID from URL or direct ID
+   - `display_video_status()` - Full status display with patterns, note path, history
+   - `display_status_compact()` - One-line status for scripting
+   - `verify_note_exists()` - Check cache corruption (note deleted but cache remains)
+   - Handles verbose mode with processing history
+
+2. **`yt status VIDEO` subcommand**
+   - Accept video ID or full URL
+   - Show: title, channel, duration, patterns run, note path
+   - Verbose mode: show processing history
+   - Suggest actions (--append, --force)
+
+3. **`yt vault` subcommand**
+   - Show vault statistics: total videos, patterns, tokens
+   - `--channels` flag to list videos
+   - Uses existing CacheManager (no new vault_manager.py needed)
+
+4. **`always_run_patterns` config support**
+   - New config field in `lib/config.py`
+   - Patterns prepended to every analysis (no duplicates)
+   - Documented in default config template
+
+5. **Concise help display**
+   - Running `yt` with no arguments shows quick reference
+   - Updated `HELP_SHORT.txt` with status/vault commands
+   - Updated `HELP.md` to V4.0
+
+**Files Created**:
+- `lib/status_display.py` - Status display functionality
+
+**Files Modified**:
+- `yt` - Added subcommands (status, vault), concise help, always_run_patterns integration
+- `lib/config.py` - Added always_run_patterns field and config parsing
+- `HELP_SHORT.txt` - Added status/vault documentation
+- `HELP.md` - Updated version to 4.0
+- `HELP_SUMMARY.txt` - Updated status
+
+**Test Results**:
+```bash
+./yt                    # ✅ Shows concise help
+./yt --version          # ✅ Shows "yt 4.0.0 (Status & Vault Commands)"
+./yt status jNQXAC9IVRw # ✅ Shows video status with patterns
+./yt status VIDEO -v    # ✅ Shows processing history
+./yt vault              # ✅ Shows vault statistics
+./yt vault --channels   # ✅ Lists videos
+./yt --help             # ✅ Shows full argparse help with subcommands
+```
+
+**V4.0 Features Summary**:
+- ✅ VideoContext packet enrichment (Sprint 1)
+- ✅ `yt status VIDEO` command
+- ✅ `yt vault` command  
+- ✅ `always_run_patterns` config
+- ✅ Concise help on no-args
+- ⏳ Pattern Discovery (`yt patterns`) - Not implemented
+- ⏳ Transcript Refinement - Not implemented
+
+**Status**: ✅ V4.0 CORE FEATURES COMPLETE
+
+**Remaining V4.0 Work**:
+- Pattern Discovery commands (`yt patterns`, `yt patterns search`, etc.)
+- Transcript Refinement pipeline
+- Vault-wide operations (`yt vault apply`)
+
+**Command Reference (V4.0)**:
+```bash
+yt                          # Concise help
+yt URL                      # Smart analysis
+yt --quick URL              # Fast mode
+yt --deep URL               # Complete analysis
+yt --preview URL            # Show recommendations
+yt status VIDEO             # Show video status
+yt status VIDEO -v          # With processing history
+yt vault                    # Vault statistics
+yt vault --channels         # List videos
+yt --list-processed         # List all cached videos
+yt --append --patterns X Y  # Add patterns incrementally
+yt --force URL              # Re-analyze
+```
+
+

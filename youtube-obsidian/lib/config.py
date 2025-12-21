@@ -25,6 +25,9 @@ class Config:
     keep_temp_files: bool = False
     verbose: bool = False
     
+    # Always-run patterns (run on every video first)
+    always_run_patterns: list = field(default_factory=list)
+    
     # Auto-analyze settings (used when analysis_mode=auto)
     auto_min_priority: str = "high"  # essential, high, medium, optional
     auto_max_patterns: int = 15
@@ -103,6 +106,14 @@ keep_temp_files: false
 
 # Show detailed output during processing?
 verbose: false
+
+# ============================================================================
+# ALWAYS-RUN PATTERNS
+# ============================================================================
+# Patterns that run on EVERY video before mode-specific patterns.
+# Useful for baseline analysis you always want. Leave empty for none.
+# Example: ["extract_main_idea", "youtube_summary"]
+always_run_patterns: []
 
 # ============================================================================
 # AUTO MODE SETTINGS (used when analysis_mode=auto)
@@ -214,6 +225,9 @@ def load_config() -> Config:
         config.open_in_editor = user_config.get('open_in_editor', config.open_in_editor)
         config.keep_temp_files = user_config.get('keep_temp_files', config.keep_temp_files)
         config.verbose = user_config.get('verbose', config.verbose)
+        
+        # Always-run patterns
+        config.always_run_patterns = user_config.get('always_run_patterns', config.always_run_patterns)
         
         # Auto mode settings
         if 'auto' in user_config:

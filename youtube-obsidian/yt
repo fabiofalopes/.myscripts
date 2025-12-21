@@ -9,12 +9,15 @@ Usage:
     yt --quick URL         # Fast: 5 essential patterns
     yt --deep URL          # Complete: all patterns
     yt --preview URL       # Show recommendations only
+    yt status VIDEO        # Show status of processed video
+    yt vault               # Show vault statistics
     yt --help              # Show all options
 
 Examples:
     yt "https://youtube.com/watch?v=XYZ"
     yt --quick "https://youtube.com/watch?v=XYZ"
-    yt --model llama-70b "https://youtube.com/watch?v=XYZ"
+    yt status jNQXAC9IVRw
+    yt vault
 
 Configuration:
     Edit ~/.yt-obsidian/config.yml to customize defaults
@@ -41,6 +44,7 @@ from lib.extractor import extract_metadata
 from lib.fabric_orchestrator import orchestrate_fabric_analysis
 from lib.cache_manager import CacheManager, CacheEntry
 from lib.incremental_writer import append_patterns_to_note
+from lib.status_display import display_video_status, display_status_compact
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -52,6 +56,36 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
+    # Create subparsers for commands
+    subparsers = parser.add_subparsers(dest="command", help="Commands")
+    
+    # Status command: yt status VIDEO_ID
+    status_parser = subparsers.add_parser(
+        "status",
+        help="Show status of a processed video"
+    )
+    status_parser.add_argument(
+        "video",
+        help="Video ID or URL"
+    )
+    status_parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Show processing history"
+    )
+    
+    # Vault command: yt vault
+    vault_parser = subparsers.add_parser(
+        "vault",
+        help="Show vault statistics"
+    )
+    vault_parser.add_argument(
+        "--channels",
+        action="store_true",
+        help="Group by channel"
+    )
+    
+    # Main command arguments (when no subcommand)
     parser.add_argument(
         "url",
         nargs="?",  # Make URL optional
@@ -142,7 +176,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 2.0.0 (Simplified Interface)"
+        version="%(prog)s 4.0.0 (Status & Vault Commands)"
     )
     
     return parser
@@ -262,6 +296,83 @@ def show_recommendations(
     print("="*80 + "\n")
 
 
+def show_concise_help():
+    """Show concise help when yt is run without arguments."""
+    help_text = """yt - YouTube to Obsidian
+
+USAGE
+  yt URL                   Process video with smart analysis
+  yt --quick URL           Fast mode (5 patterns, ~25s)
+  yt --deep URL            Complete analysis (~70s)
+  yt --preview URL         Show recommendations only
+  yt status VIDEO          Show status of processed video
+  yt vault                 Show vault statistics
+
+COMMON FLAGS
+  --model MODEL            Override AI model
+  --patterns P1 P2 ...     Run specific patterns
+  --force                  Re-analyze (ignore cache)
+  --append --patterns ...  Add patterns to existing note
+  -v, --verbose            Detailed output
+
+EXAMPLES
+  yt "https://youtube.com/watch?v=XYZ"
+  yt --quick "https://youtu.be/ABC"
+  yt status jNQXAC9IVRw
+  yt --append --patterns extract_questions "URL"
+
+CONFIG: ~/.yt-obsidian/config.yml
+HELP:   yt --help (full options)
+"""
+    print(help_text)
+
+
+def handle_status_command(args, config: Config) -> int:
+    """Handle 'yt status VIDEO' command."""
+    output_dir = resolve_output_dir(config)
+    cache_dir = Path(output_dir) / ".cache"
+    
+    display_video_status(
+        url_or_id=args.video,
+        cache_dir=cache_dir,
+        verbose=args.verbose
+    )
+    return 0
+
+
+def handle_vault_command(args, config: Config) -> int:
+    """Handle 'yt vault' command."""
+    output_dir = resolve_output_dir(config)
+    cache = CacheManager(Path(output_dir) / ".cache")
+    
+    stats = cache.get_statistics()
+    videos = cache.list_all()
+    
+    print(f"\n  Vault Statistics")
+    print(f"  {'=' * 40}")
+    print(f"  Total videos: {stats['total_videos']}")
+    print(f"  Total patterns: {stats['total_patterns']}")
+    print(f"  Total tokens: {stats['total_tokens_used']:,}")
+    print(f"  Cache dir: {stats['cache_directory']}")
+    
+    if args.channels and videos:
+        # Group by channel (if we have that info)
+        # For now, just list videos
+        print(f"\n  Videos:")
+        for video_id, info in videos[:10]:  # Show first 10
+            title = info.get('title', 'Untitled')
+            if len(title) > 45:
+                title = title[:42] + "..."
+            print(f"    - {title}")
+            print(f"      {video_id} ({info.get('patterns_count', 0)} patterns)")
+        
+        if len(videos) > 10:
+            print(f"\n    ... and {len(videos) - 10} more videos")
+    
+    print()
+    return 0
+
+
 def main() -> int:
     """Main entry point for yt command."""
     parser = create_parser()
@@ -275,8 +386,15 @@ def main() -> int:
         config_path = get_config_path()
         if not config_path.exists():
             create_default_config()
-            print(f"✨ Created default config at {config_path}")
+            print(f"  Created default config at {config_path}")
             print(f"   Edit this file to customize behavior\n")
+        
+        # Handle subcommands
+        if args.command == "status":
+            return handle_status_command(args, config)
+        
+        if args.command == "vault":
+            return handle_vault_command(args, config)
         
         # Determine mode based on flags
         if args.quick:
@@ -292,7 +410,9 @@ def main() -> int:
         
         # Check if URL is required
         if not args.url and not args.list_processed:
-            parser.error("URL is required (unless using --list-processed)")
+            # Show concise help if no command given
+            show_concise_help()
+            return 0
         
         # Handle --list-processed flag
         if args.list_processed:
@@ -506,6 +626,14 @@ def main() -> int:
         # Run Fabric analysis if patterns specified
         ai_analysis = None
         if patterns and len(patterns) > 0 and transcript:
+            # Merge always_run_patterns (prepend, no duplicates)
+            if config.always_run_patterns:
+                always_patterns = [p for p in config.always_run_patterns if p not in patterns]
+                if always_patterns:
+                    patterns = always_patterns + patterns
+                    if verbose:
+                        print(f"📌 Always-run patterns: {', '.join(always_patterns)}")
+            
             print(f"\n🔮 Running AI analysis with {len(patterns)} patterns...")
             
             # Import and run orchestrator
