@@ -48,6 +48,50 @@ BACKUPS_DIR="$CACHE_DIR/backups"
 INDEX_FILE="$CACHE_DIR/index.txt"
 CLEANUP_MARKER="$CACHE_DIR/.last_cleanup"
 
+# ========== CATEGORY CONFIGURATION ==========
+# Categories for intelligent filename prefixes
+
+# CRITICAL: Bash version check (macOS has 3.2, needs 4.0+ for associative arrays)
+BASH_MAJOR="${BASH_VERSION%%.*}"
+if [ "$BASH_MAJOR" -lt 4 ]; then
+    USE_ASSOC_ARRAYS=false
+else
+    USE_ASSOC_ARRAYS=true
+fi
+
+# Fallback functions for bash 3.x (case statements instead of arrays)
+get_category_from_tag() {
+    local tag=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+    case "$tag" in
+        development|coding|programming|dev) echo "dev" ;;
+        meeting|call|discussion|standup) echo "meeting" ;;
+        idea|brainstorm|concept) echo "idea" ;;
+        task|todo|action) echo "task" ;;
+        documentation|docs|reference) echo "doc" ;;
+        research|analysis|investigation) echo "research" ;;
+        personal|journal|diary) echo "personal" ;;
+        *) echo "" ;;
+    esac
+}
+
+matches_category_keywords() {
+    local category="$1"
+    local text="$2"
+    case "$category" in
+        dev) echo "$text" | grep -qiE "\\bcode\\b|\\bfunction\\b|\\bclass\\b|\\bbug\\b|\\bdebug\\b|\\bapi\\b|\\bgit\\b|\\bcommit\\b|\\bscript\\b|\\bdeploy\\b" ;;
+        meeting) echo "$text" | grep -qiE "\\bmeeting\\b|\\bdiscussed\\b|\\bagenda\\b|\\battendees\\b|\\bminutes\\b|\\bcall\\b|\\bsync\\b" ;;
+        idea) echo "$text" | grep -qiE "\\bidea\\b|\\bbrainstorm\\b|\\bconcept\\b|\\bvision\\b|\\bdream\\b" ;;
+        task) echo "$text" | grep -qiE "\\btodo\\b|action item|\\btask\\b|\\bdeadline\\b|\\bcomplete\\b|\\bfinish\\b|\\bassign\\b" ;;
+        doc) echo "$text" | grep -qiE "\\bdocumentation\\b|\\breference\\b|\\bguide\\b|\\btutorial\\b|how-to|\\bmanual\\b" ;;
+        research) echo "$text" | grep -qiE "\\bresearch\\b|\\banalysis\\b|\\bfindings\\b|\\bstudy\\b|\\binvestigate\\b|\\bexplore\\b" ;;
+        personal) echo "$text" | grep -qiE "\\bjournal\\b|\\breflection\\b|\\bpersonal\\b|\\bmood\\b|\\bdiary\\b" ;;
+        *) return 1 ;;
+    esac
+}
+
+# Default category when no match found
+DEFAULT_CATEGORY="note"
+
 # Helper functions
 print_section() {
     echo -e "\n${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -218,6 +262,97 @@ EOF
     fi
 }
 
+# Extract tags from frontmatter (handles multiple YAML formats)
+extract_tags_from_frontmatter() {
+    local frontmatter="$1"
+    local tags=""
+    
+    # Format 1: Inline array - tags: [tag1, tag2, tag3]
+    if echo "$frontmatter" | grep -qE '^tags: *\['; then
+        tags=$(echo "$frontmatter" | grep -E '^tags:' | \
+            sed 's/^tags: *\[//; s/\].*$//' | \
+            tr ',' '\n' | \
+            sed 's/^[ "'"'"'#]*//; s/[ "'"'"']*$//' | \
+            tr '\n' ' ')
+    
+    # Format 2: Single value - tags: tagname
+    elif echo "$frontmatter" | grep -qE '^tags: *[a-zA-Z#]'; then
+        tags=$(echo "$frontmatter" | grep -E '^tags:' | \
+            sed 's/^tags: *//; s/^#//')
+    
+    # Format 3: Block format - tags:\n  - tag1\n  - tag2
+    elif echo "$frontmatter" | grep -qE '^tags: *$'; then
+        tags=$(echo "$frontmatter" | awk '
+            /^tags:/ { capture=1; next }
+            capture && /^  - / { gsub(/^  - /, ""); gsub(/^#/, ""); print }
+            capture && /^[^ ]/ { exit }
+        ' | tr '\n' ' ')
+    fi
+    
+    # Normalize: lowercase, trim whitespace
+    echo "$tags" | tr '[:upper:]' '[:lower:]' | xargs
+}
+
+# Detect category from tags, frontmatter, or content
+detect_category() {
+    local title="$1"
+    local frontmatter="$2"
+    local content="$3"
+    
+    # Priority 1: Check Obsidian tags in frontmatter
+    if [ -n "$frontmatter" ]; then
+        local tags=$(extract_tags_from_frontmatter "$frontmatter")
+        
+        # Check each tag against mapping
+        for tag in $tags; do
+            tag=$(echo "$tag" | xargs | tr '[:upper:]' '[:lower:]')
+            
+            local result=$(get_category_from_tag "$tag")
+            if [ -n "$result" ]; then
+                echo "$result"
+                return 0
+            fi
+        done
+    fi
+    
+    # Priority 2: Check frontmatter category field
+    if [ -n "$frontmatter" ]; then
+        local fm_category=$(echo "$frontmatter" | grep "^category:" | \
+            sed 's/^category: *//g' | tr -d '"' | tr '[:upper:]' '[:lower:]' | xargs)
+        if [ -n "$fm_category" ]; then
+            # Validate it's a known category
+            case "$fm_category" in
+                dev|meeting|idea|task|doc|research|personal|note)
+                    echo "$fm_category"
+                    return 0
+                    ;;
+            esac
+        fi
+    fi
+    
+    # Priority 3: Keyword matching in title (highest weight)
+    local title_lower=$(echo "$title" | tr '[:upper:]' '[:lower:]')
+    for category in dev meeting idea task doc research personal; do
+        if matches_category_keywords "$category" "$title_lower"; then
+            echo "$category"
+            return 0
+        fi
+    done
+    
+    # Priority 4: Keyword matching in content (lower weight, require 2+ matches)
+    local content_lower=$(echo "$content" | head -50 | tr '[:upper:]' '[:lower:]')
+    for category in dev meeting idea task doc research personal; do
+        # Fallback: simplified matching (at least one strong match)
+        if matches_category_keywords "$category" "$content_lower"; then
+            echo "$category"
+            return 0
+        fi
+    done
+    
+    # Priority 5: Default fallback
+    echo "$DEFAULT_CATEGORY"
+}
+
 show_help() {
     echo -e "${BOLD}Obsidian Note Polish Workflow${NC}"
     echo ""
@@ -235,6 +370,7 @@ show_help() {
     echo "Options:"
     echo "  -o, --output FILE       Save to different file"
     echo "  -r, --rename-file       Rename file based on generated title (slugified)"
+    echo "  -c, --category CAT      Override category detection (dev|meeting|idea|task|doc|research|personal|note)"
     echo "  -t, --title-only        Generate only title"
     echo "  -f, --frontmatter-only  Generate only frontmatter"
     echo "  -y, --yes               Skip confirmation prompts"
@@ -260,6 +396,7 @@ MODE="combined"
 AUTO_YES=false
 EDIT_IN_PLACE=false
 RENAME_FILE=false
+CATEGORY_OVERRIDE=""
 
 # Check if first argument is a file (file editing mode)
 if [ $# -gt 0 ] && [ -f "$1" ]; then
@@ -278,6 +415,20 @@ while [[ $# -gt 0 ]]; do
         -r|--rename-file)
             RENAME_FILE=true
             shift
+            ;;
+        -c|--category)
+            CATEGORY_OVERRIDE="$2"
+            # Validate category
+            case "$CATEGORY_OVERRIDE" in
+                dev|meeting|idea|task|doc|research|personal|note)
+                    ;;
+                *)
+                    print_error "Invalid category: $CATEGORY_OVERRIDE"
+                    echo "Valid categories: dev, meeting, idea, task, doc, research, personal, note"
+                    exit 1
+                    ;;
+            esac
+            shift 2
             ;;
         -y|--yes)
             AUTO_YES=true
@@ -458,6 +609,18 @@ case $MODE in
         ;;
 esac
 
+# ========== DETECT CATEGORY FOR RENAME ==========
+# Detect category early so it's available for both filename and frontmatter
+if [ "$RENAME_FILE" = true ]; then
+    if [ -n "$CATEGORY_OVERRIDE" ]; then
+        CATEGORY="$CATEGORY_OVERRIDE"
+        print_status "Using override category: $CATEGORY"
+    else
+        CATEGORY=$(detect_category "$TITLE" "$FRONTMATTER" "$NOTE_CONTENT")
+        print_status "Detected category: $CATEGORY"
+    fi
+fi
+
 # ========== INJECT CONSISTENT DATETIME ==========
 # Force script datetime over AI-generated date for consistency
 if [ -n "$FRONTMATTER" ]; then
@@ -488,6 +651,24 @@ if [ -n "$FRONTMATTER" ]; then
             ')
             print_status "Added created field: $SCRIPT_START_DATE"
         fi
+    fi
+fi
+
+# ========== INJECT CATEGORY ==========
+# Add category to frontmatter if detected during rename
+if [ -n "$FRONTMATTER" ] && [ "$RENAME_FILE" = true ] && [ -n "$CATEGORY" ]; then
+    # Check if category field already exists
+    if echo "$FRONTMATTER" | grep -q "^category:"; then
+        # Replace existing category
+        FRONTMATTER=$(echo "$FRONTMATTER" | sed "s|^category: .*|category: $CATEGORY|")
+        print_status "Updated category in frontmatter: $CATEGORY"
+    else
+        # Add category field after created field (maintains logical field order)
+        FRONTMATTER=$(echo "$FRONTMATTER" | awk -v cat="$CATEGORY" '
+            /^created:/ { print; print "category: " cat; next }
+            { print }
+        ')
+        print_status "Added category to frontmatter: $CATEGORY"
     fi
 fi
 
@@ -583,6 +764,8 @@ if [ "$EDIT_IN_PLACE" = true ]; then
     
     # Rename file if requested and we have a title
     if [ "$RENAME_FILE" = true ] && [ -n "$TITLE" ]; then
+        # Category already detected earlier for frontmatter injection
+        # Generate new filename with category prefix
         SLUGIFIED_TITLE=$(slugify "$TITLE")
         
         # Validate slugified title
@@ -599,7 +782,7 @@ if [ "$EDIT_IN_PLACE" = true ]; then
         fi
         
         DIR_NAME=$(dirname "$INPUT_FILE")
-        NEW_FILE="${DIR_NAME}/${SLUGIFIED_TITLE}.md"
+        NEW_FILE="${DIR_NAME}/${CATEGORY}-${SLUGIFIED_TITLE}.md"
         
         # Check if target already exists
         if [ -f "$NEW_FILE" ] && [ "$NEW_FILE" != "$INPUT_FILE" ]; then
