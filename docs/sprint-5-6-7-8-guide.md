@@ -2,7 +2,7 @@
 
 **Priority**: P0 (CRITICAL - Must Do First)
 **Effort**: 30 minutes
-**Status**: PENDING
+**Status**: COMPLETE (2025-12-21)
 
 ## Objective
 
@@ -18,30 +18,41 @@ Git status shows loose ends:
 ## Tasks
 
 ### 5.1 Handle youtube-obsidian changes
-- [ ] Review changes to `CONTEXT.md`, `config.py`, `yt`
-- [ ] Decide: commit separately or stash
+- [x] Review changes to `CONTEXT.md`, `config.py`, `yt`
+- [x] Committed as V4.0 release (status/vault commands)
 
 ### 5.2 Handle obsidian-polish backups
-- [ ] Decide: keep in repo or gitignore
-- [ ] Files: `obsidian-polish.backup-*`
+- [x] Added to .gitignore (*.backup-*, obsidian-polish.backup-*)
 
 ### 5.3 Commit or gitignore view-kanban.sh
-- [ ] This was a workaround for not using vibe-kanban properly
-- [ ] Decide: keep as utility or remove
+- [x] Committed as utility script
 
 ### 5.4 Commit AGENTS.md
-- [ ] Review content
-- [ ] Commit if valuable for project context
+- [x] Added to .gitignore (placeholder only, not ready)
 
 ### 5.5 Populate meta/ folder
-- [ ] Write methodology framework from sub-agent outputs
-- [ ] This was promised but never done
+- [ ] Deferred to Sprint 7 (methodology documentation)
 
 ## Success Criteria
 
-- `git status` shows clean working tree
-- All decisions documented
-- Ready for next sprint
+- [x] `git status` shows clean working tree
+- [x] All decisions documented
+- [x] Ready for next sprint
+
+## Completion Notes (2025-12-21)
+
+**Commits made:**
+1. `feat(youtube-obsidian): V4.0 - status/vault commands and help docs`
+2. `chore: gitignore backup files and AGENTS.md placeholder`
+3. `feat: add view-kanban.sh utility for quick kanban board display`
+
+**Files committed:**
+- youtube-obsidian V4.0 (7 files, 1877 insertions)
+- view-kanban.sh utility
+
+**Files gitignored:**
+- *.backup-* patterns
+- AGENTS.md (placeholder)
 
 ## Dependencies
 
@@ -212,7 +223,7 @@ Redesign Sprint 4 based on user feedback. Simplify the approach.
 # Sprint Order
 
 ```
-Sprint 5: Cleanup     [CRITICAL - Do First]
+Sprint 5: Cleanup     [COMPLETE - 2025-12-21]
     ↓
 Sprint 6: Vibe-Kanban [Setup tooling]
     ↓
@@ -224,6 +235,6 @@ Sprint 8: Pattern Enrichment [ON HOLD - User Review]
 ## Next Session Start
 
 1. Read this file
-2. Execute Sprint 5 (cleanup)
-3. Commit this sprint guide
+2. ~~Execute Sprint 5 (cleanup)~~ DONE
+3. ~~Commit this sprint guide~~ DONE
 4. Proceed to Sprint 6
