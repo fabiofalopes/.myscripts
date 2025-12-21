@@ -34,6 +34,13 @@ BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
 
+# ========== DATETIME CAPTURE ==========
+# Captured at script start for consistency across all operations
+SCRIPT_START_TIMESTAMP=$(date +%s)
+SCRIPT_START_DATE=$(date '+%Y-%m-%d')
+SCRIPT_START_DATETIME=$(date '+%Y-%m-%d %H:%M:%S')
+SCRIPT_START_ISO=$(date -Iseconds)
+
 # Helper functions
 print_section() {
     echo -e "\n${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -221,6 +228,22 @@ if echo "$NOTE_CONTENT" | head -1 | grep -q "^---$"; then
     fi
 fi
 
+# Extract original created date if frontmatter exists (preserve for existing notes)
+ORIGINAL_CREATED=""
+if [ "$HAS_FRONTMATTER" = true ]; then
+    ORIGINAL_CREATED=$(echo "$NOTE_CONTENT" | awk '
+        /^---$/ { if (++dashes == 2) exit }
+        dashes == 1 && /^created:/ { 
+            sub(/^created: */, "")
+            print
+            exit 
+        }
+    ')
+    if [ -n "$ORIGINAL_CREATED" ]; then
+        print_status "Preserved original created date: $ORIGINAL_CREATED"
+    fi
+fi
+
 # Step 3: Generate metadata
 print_section "Generating Metadata"
 
@@ -293,6 +316,39 @@ case $MODE in
         print_success "Generated title and frontmatter"
         ;;
 esac
+
+# ========== INJECT CONSISTENT DATETIME ==========
+# Force script datetime over AI-generated date for consistency
+if [ -n "$FRONTMATTER" ]; then
+    if [ "$HAS_FRONTMATTER" = true ] && [ -n "$ORIGINAL_CREATED" ]; then
+        # Existing note: preserve original created date, add modified field
+        FRONTMATTER=$(echo "$FRONTMATTER" | sed "s|^created: .*|created: $ORIGINAL_CREATED|")
+        # Add modified field before closing ---
+        FRONTMATTER=$(echo "$FRONTMATTER" | awk -v date="$SCRIPT_START_DATE" '
+            /^---$/ && NR > 1 { 
+                print "modified: " date
+                print
+                next
+            }
+            { print }
+        ')
+        print_status "Preserved created: $ORIGINAL_CREATED, added modified: $SCRIPT_START_DATE"
+    else
+        # New note: use script date for created field
+        if echo "$FRONTMATTER" | grep -q "^created:"; then
+            # Replace AI-generated date with script date
+            FRONTMATTER=$(echo "$FRONTMATTER" | sed "s|^created: .*|created: $SCRIPT_START_DATE|")
+            print_status "New note, created: $SCRIPT_START_DATE"
+        else
+            # Add created field if missing (insert after opening ---)
+            FRONTMATTER=$(echo "$FRONTMATTER" | awk -v date="$SCRIPT_START_DATE" '
+                NR==1 { print; print "created: " date; next }
+                { print }
+            ')
+            print_status "Added created field: $SCRIPT_START_DATE"
+        fi
+    fi
+fi
 
 # Step 4: Build the enhanced note
 print_section "Building Enhanced Note"
