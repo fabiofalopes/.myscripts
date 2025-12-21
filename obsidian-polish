@@ -41,6 +41,13 @@ SCRIPT_START_DATE=$(date '+%Y-%m-%d')
 SCRIPT_START_DATETIME=$(date '+%Y-%m-%d %H:%M:%S')
 SCRIPT_START_ISO=$(date -Iseconds)
 
+# ========== CACHE CONFIGURATION ==========
+# Central backup cache to avoid .bak file clutter
+CACHE_DIR="${OBSIDIAN_POLISH_CACHE:-$HOME/.cache/obsidian-polish}"
+BACKUPS_DIR="$CACHE_DIR/backups"
+INDEX_FILE="$CACHE_DIR/index.txt"
+CLEANUP_MARKER="$CACHE_DIR/.last_cleanup"
+
 # Helper functions
 print_section() {
     echo -e "\n${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -69,13 +76,154 @@ slugify() {
     echo "$1" | iconv -t ascii//TRANSLIT | sed -E 's/[^a-zA-Z0-9]+/-/g' | sed -E 's/^-+|-+$//g' | tr '[:upper:]' '[:lower:]'
 }
 
+# ========== CACHE MANAGEMENT FUNCTIONS ==========
+
+# Initialize cache directory structure
+init_cache_dir() {
+    if [ ! -d "$BACKUPS_DIR" ]; then
+        mkdir -p "$BACKUPS_DIR"
+        print_status "Created cache directory: $CACHE_DIR"
+    fi
+    
+    if [ ! -f "$INDEX_FILE" ]; then
+        cat > "$INDEX_FILE" << 'EOF'
+# Obsidian Polish Backup Index
+# Format: timestamp|source_file|backup_file|operation|new_file
+EOF
+        print_status "Initialized cache index"
+    fi
+}
+
+# Generate short hash for file path uniqueness
+get_file_hash() {
+    local filepath="$1"
+    local abs_path=$(realpath "$filepath" 2>/dev/null || echo "$filepath")
+    echo "$abs_path" | md5sum 2>/dev/null | cut -c1-6 || echo "$abs_path" | md5 2>/dev/null | cut -c1-6
+}
+
+# Backup file to central cache
+backup_to_cache() {
+    local input_file="$1"
+    local operation="${2:-edit}"
+    local new_file="${3:-}"  # Optional: for rename operations
+    
+    # Initialize cache if needed
+    init_cache_dir
+    
+    # Generate backup filename
+    local timestamp=$(echo "$SCRIPT_START_DATETIME" | tr ' :' '_')
+    local hash=$(get_file_hash "$input_file")
+    local basename=$(basename "$input_file" | tr '.' '-')
+    local backup_filename="${timestamp}_${hash}_${basename}"
+    local backup_path="$BACKUPS_DIR/$backup_filename"
+    
+    # Copy file to cache
+    cp "$input_file" "$backup_path" 2>/dev/null || {
+        print_warning "Backup failed, continuing anyway"
+        return 1
+    }
+    
+    # Append to index
+    local abs_source=$(realpath "$input_file" 2>/dev/null || echo "$input_file")
+    echo "${SCRIPT_START_ISO}|${abs_source}|${backup_filename}|${operation}|${new_file}" >> "$INDEX_FILE"
+    
+    # Trigger cleanup check (async, non-blocking)
+    cleanup_cache &
+    
+    echo "$backup_path"
+}
+
+# Clean up old backups
+cleanup_cache() {
+    # Check if cleanup needed
+    local file_count=$(find "$BACKUPS_DIR" -type f 2>/dev/null | wc -l)
+    local last_cleanup=0
+    
+    if [ -f "$CLEANUP_MARKER" ]; then
+        # macOS and Linux compatible stat
+        last_cleanup=$(stat -c %Y "$CLEANUP_MARKER" 2>/dev/null || stat -f %m "$CLEANUP_MARKER" 2>/dev/null || echo 0)
+    fi
+    
+    local now=$(date +%s)
+    local age=$((now - last_cleanup))
+    
+    # Only cleanup if >100 files or >24h since last cleanup
+    if [ "$file_count" -lt 100 ] && [ "$age" -lt 86400 ]; then
+        return 0
+    fi
+    
+    print_status "Running cache cleanup (background)..."
+    
+    # Remove files older than 30 days
+    find "$BACKUPS_DIR" -type f -mtime +30 -delete 2>/dev/null
+    
+    # Per-file limit: keep last 10 backups per source file
+    if [ -f "$INDEX_FILE" ]; then
+        # Create temp file with entries to keep
+        local temp_index=$(mktemp)
+        
+        # Copy header
+        grep "^#" "$INDEX_FILE" > "$temp_index"
+        
+        # Process entries: sort by source file, then timestamp descending
+        # Keep newest 10 per source file, delete older backups
+        grep -v "^#" "$INDEX_FILE" | sort -t'|' -k2,2 -k1,1r | \
+        awk -F'|' -v backups_dir="$BACKUPS_DIR" '
+        {
+            source = $2
+            backup_file = $3
+            count[source]++
+            
+            if (count[source] <= 10) {
+                # Keep this entry
+                print $0
+            } else {
+                # Delete the backup file
+                system("rm -f \"" backups_dir "/" backup_file "\" 2>/dev/null")
+            }
+        }
+        ' >> "$temp_index"
+        
+        mv "$temp_index" "$INDEX_FILE"
+    fi
+    
+    # Update cleanup marker
+    touch "$CLEANUP_MARKER"
+}
+
+# Add rename history to file as HTML comment
+add_rename_history() {
+    local file="$1"
+    local old_name="$2"
+    local new_name="$3"
+    
+    # Create history entry
+    local history_entry="${SCRIPT_START_DATETIME}: $(basename "$old_name") → $(basename "$new_name")"
+    
+    # Check if file already has rename history
+    if grep -q "<!-- rename-history" "$file" 2>/dev/null; then
+        # Append to existing history (before closing -->)
+        sed -i.tmp "s|-->|${history_entry}\n-->|" "$file"
+        rm -f "${file}.tmp"
+        print_status "Updated rename history"
+    else
+        # Add new history section
+        cat >> "$file" << EOF
+
+<!-- rename-history
+${history_entry}
+-->
+EOF
+        print_status "Added rename history"
+    fi
+}
+
 show_help() {
     echo -e "${BOLD}Obsidian Note Polish Workflow${NC}"
     echo ""
     echo "Usage:"
     echo "  ${BOLD}File Editing Mode:${NC}"
     echo "    obsidian-polish note.md                  # Edit in-place (creates backup)"
-    echo "    obsidian-polish note.md --no-backup      # Edit without backup"
     echo "    obsidian-polish note.md -r               # Rename file based on title"
     echo "    obsidian-polish note.md -o output.md     # Save to new file"
     echo ""
@@ -87,7 +235,6 @@ show_help() {
     echo "Options:"
     echo "  -o, --output FILE       Save to different file"
     echo "  -r, --rename-file       Rename file based on generated title (slugified)"
-    echo "  --no-backup             Don't create .bak file (for in-place edit)"
     echo "  -t, --title-only        Generate only title"
     echo "  -f, --frontmatter-only  Generate only frontmatter"
     echo "  -y, --yes               Skip confirmation prompts"
@@ -101,7 +248,6 @@ show_help() {
     echo "Examples:"
     echo "  obsidian-polish meeting-notes.md          # Smart edit with backup"
     echo "  obsidian-polish draft.md -r -y            # Edit, rename, no prompts"
-    echo "  obsidian-polish draft.md --no-backup      # Quick edit without backup"
     echo "  pbpaste | obsidian-polish                 # Review before applying"
     echo ""
     exit 0
@@ -111,7 +257,6 @@ show_help() {
 INPUT_FILE=""
 OUTPUT_FILE=""
 MODE="combined"
-NO_BACKUP=false
 AUTO_YES=false
 EDIT_IN_PLACE=false
 RENAME_FILE=false
@@ -129,10 +274,6 @@ while [[ $# -gt 0 ]]; do
             OUTPUT_FILE="$2"
             EDIT_IN_PLACE=false
             shift 2
-            ;;
-        --no-backup)
-            NO_BACKUP=true
-            shift
             ;;
         -r|--rename-file)
             RENAME_FILE=true
@@ -379,6 +520,22 @@ if [ "$HAS_FRONTMATTER" = true ]; then
     ')
 fi
 
+# Extract and preserve rename history if present
+RENAME_HISTORY=""
+if echo "$NOTE_CONTENT" | grep -q "<!-- rename-history"; then
+    RENAME_HISTORY=$(echo "$NOTE_CONTENT" | awk '
+        /<!-- rename-history/ { capture=1 }
+        capture { print }
+        /-->/ && capture { exit }
+    ')
+    # Remove rename history from CLEAN_CONTENT
+    CLEAN_CONTENT=$(echo "$CLEAN_CONTENT" | awk '
+        /<!-- rename-history/ { skip=1 }
+        !skip { print }
+        /-->/ && skip { skip=0; next }
+    ')
+fi
+
 # Add title as H1 if generated and not already present
 if [ -n "$TITLE" ]; then
     # Check if content already starts with H1
@@ -402,15 +559,22 @@ else
     ENHANCED_NOTE="$CLEAN_CONTENT"
 fi
 
+# Re-append preserved rename history if it existed
+if [ -n "$RENAME_HISTORY" ]; then
+    ENHANCED_NOTE="${ENHANCED_NOTE}\n\n${RENAME_HISTORY}"
+fi
+
 # Step 5: Output/Write
 if [ "$EDIT_IN_PLACE" = true ]; then
     print_section "Editing File In-Place"
     
-    # Create backup unless disabled
-    if [ "$NO_BACKUP" = false ]; then
-        BACKUP_FILE="${INPUT_FILE}.bak"
-        cp "$INPUT_FILE" "$BACKUP_FILE"
-        print_success "Backup created: $BACKUP_FILE"
+    # Create backup in cache (always, for safety)
+    BACKUP_PATH=$(backup_to_cache "$INPUT_FILE" "edit")
+    if [ -n "$BACKUP_PATH" ]; then
+        print_success "Backup saved: $(basename "$BACKUP_PATH")"
+        print_status "Cache location: $CACHE_DIR"
+    else
+        print_warning "Backup creation failed, but continuing"
     fi
     
     # Write enhanced content
@@ -454,8 +618,19 @@ if [ "$EDIT_IN_PLACE" = true ]; then
         
         # Rename if different
         if [ "$NEW_FILE" != "$INPUT_FILE" ]; then
+            # Save old filename for history
+            OLD_FILE="$INPUT_FILE"
+            
+            # Perform rename
             mv "$INPUT_FILE" "$NEW_FILE"
             print_success "Renamed to: $NEW_FILE"
+            
+            # Add rename history to the file
+            add_rename_history "$NEW_FILE" "$OLD_FILE" "$NEW_FILE"
+            
+            # Record rename in cache index (backup post-rename state)
+            backup_to_cache "$NEW_FILE" "rename" "$NEW_FILE"
+            
             INPUT_FILE="$NEW_FILE"
         fi
     fi
