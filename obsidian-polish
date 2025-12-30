@@ -290,7 +290,7 @@ extract_tags_from_frontmatter() {
     fi
     
     # Normalize: lowercase, trim whitespace
-    echo "$tags" | tr '[:upper:]' '[:lower:]' | xargs
+    echo "$tags" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
 # Detect category from tags, frontmatter, or content
@@ -305,7 +305,7 @@ detect_category() {
         
         # Check each tag against mapping
         for tag in $tags; do
-            tag=$(echo "$tag" | xargs | tr '[:upper:]' '[:lower:]')
+            tag=$(echo "$tag" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')
             
             local result=$(get_category_from_tag "$tag")
             if [ -n "$result" ]; then
@@ -318,7 +318,7 @@ detect_category() {
     # Priority 2: Check frontmatter category field
     if [ -n "$frontmatter" ]; then
         local fm_category=$(echo "$frontmatter" | grep "^category:" | \
-            sed 's/^category: *//g' | tr -d '"' | tr '[:upper:]' '[:lower:]' | xargs)
+            sed 's/^category: *//g' | tr -d '"' | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         if [ -n "$fm_category" ]; then
             # Validate it's a known category
             case "$fm_category" in
@@ -719,10 +719,8 @@ fi
 
 # Add title as H1 if generated and not already present
 if [ -n "$TITLE" ]; then
-    # Check if content already starts with H1
-    # Pure bash: extract first line without subshell/pipe (avoids SIGPIPE on large content)
+    # Check if content already starts with H1 using pure bash (avoids subshell SIGPIPE issues)
     FIRST_LINE="${CLEAN_CONTENT%%$'\n'*}"
-    # Trim leading/trailing whitespace
     FIRST_LINE="${FIRST_LINE#"${FIRST_LINE%%[![:space:]]*}"}"
     FIRST_LINE="${FIRST_LINE%"${FIRST_LINE##*[![:space:]]}"}"
     if [[ "$FIRST_LINE" == "#"* ]]; then
