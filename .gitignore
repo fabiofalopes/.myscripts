@@ -9,3 +9,14 @@ obsidian-polish.backup-*
 
 # Agent placeholder files (not ready for repo)
 AGENTS.md
+
+# Python virtual environments
+**/venv/
+**/.venv/
+**/env/
+**/*-env/
+**/__pycache__/
+*.pyc
+
+# MLX ecosystem (has its own venv, keep separate)
+mlx-ecosystem/
