@@ -720,10 +720,15 @@ fi
 # Add title as H1 if generated and not already present
 if [ -n "$TITLE" ]; then
     # Check if content already starts with H1
-    FIRST_LINE=$(echo "$CLEAN_CONTENT" | head -1 | xargs)
+    # Pure bash: extract first line without subshell/pipe (avoids SIGPIPE on large content)
+    FIRST_LINE="${CLEAN_CONTENT%%$'\n'*}"
+    # Trim leading/trailing whitespace
+    FIRST_LINE="${FIRST_LINE#"${FIRST_LINE%%[![:space:]]*}"}"
+    FIRST_LINE="${FIRST_LINE%"${FIRST_LINE##*[![:space:]]}"}"
     if [[ "$FIRST_LINE" == "#"* ]]; then
         print_status "Replacing existing title"
-        CLEAN_CONTENT=$(echo "$CLEAN_CONTENT" | tail -n +2)
+        # Remove first line: everything after first newline
+        CLEAN_CONTENT="${CLEAN_CONTENT#*$'\n'}"
     fi
     
     if [ -n "$ENHANCED_NOTE" ]; then
