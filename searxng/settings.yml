@@ -1,0 +1,21 @@
+# SearXNG settings
+use_default_settings: true
+server:
+  secret_key: "f81ea68e280db4ebf0aae11e3ebd8d3f" # Change this in production!
+  limiter: false # Disable limiter for local use to avoid blocking the MCP server
+  image_proxy: true
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json # Required for API/MCP access
+engines:
+  - name: google
+    engine: google
+    use_mobile_ui: false
+  - name: duckduckgo
+    engine: duckduckgo
+  - name: bing
+    engine: bing
+  - name: wikipedia
+    engine: wikipedia

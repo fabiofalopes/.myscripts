@@ -1,0 +1,51 @@
+# OpenCode Monitor Configuration
+# Source of truth: ~/.myscripts/tmux/configs/ocmonitor.config.toml
+# Deployed to: ~/.config/ocmonitor/config.toml
+# Deploy with: ~/.myscripts/tmux/scripts/deploy-ocmonitor-config.sh
+
+[general]
+# Path to OpenCode session storage
+sessions_path = "/home/fabio/.local/share/opencode/storage/session/"
+
+# Currency for cost display
+currency = "USD"
+
+# Week start day for weekly reports (monday, tuesday, ..., sunday)
+week_start = "monday"
+
+[display]
+# Display theme (default, minimal, compact)
+theme = "default"
+
+# Show visual progress bars for costs, tokens, and session time
+show_progress_bars = true
+
+# Color coding thresholds
+# Green: 0-70%, Yellow: 70-90%, Red: 90-100%
+color_thresholds = { low = 70, high = 90 }
+
+[costs]
+# Daily budget alert threshold (USD)
+daily_budget = 10.0
+
+# Monthly budget alert threshold (USD)
+monthly_budget = 300.0
+
+# Session time alert (hours)
+session_time_warning = 4.0
+session_time_critical = 5.0
+
+[refresh]
+# Auto-refresh intervals (seconds) for watch commands
+daily_refresh = 60
+weekly_refresh = 300
+monthly_refresh = 600
+models_refresh = 300
+projects_refresh = 300
+
+[export]
+# Default export format (json, csv)
+default_format = "json"
+
+# Export output directory
+output_dir = "~/.myscripts/tmux/exports/ocmonitor/"

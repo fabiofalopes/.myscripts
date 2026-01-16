@@ -65,6 +65,30 @@ bash scripts/uninstall.sh
 bash scripts/tmux_audit.sh
 ```
 
+## Observability Sessions
+
+### OpenCode Monitoring Dashboard
+
+Monitor OpenCode AI usage, costs, and performance in a dedicated tmux session:
+
+```bash
+# One-time setup: Deploy ocmonitor config
+bash scripts/deploy-ocmonitor-config.sh
+
+# Launch monitoring dashboard
+bash scripts/start-opencode-observability-monitoring.sh
+```
+
+**Features:**
+- 6 windows with explicit names (ocmonitor-live-feed, ocmonitor-daily-costs, etc.)
+- Auto-persistence across reboots (via tmux-resurrect/continuum)
+- Version-controlled configuration in `tmux/configs/ocmonitor.config.toml`
+
+**Documentation:**
+- Quick reference: [docs/OBSERVABILITY-WORKFLOW.md](../docs/OBSERVABILITY-WORKFLOW.md)
+- Design details: [docs/OPENCODE-OBSERVABILITY-DESIGN.md](docs/OPENCODE-OBSERVABILITY-DESIGN.md)
+- Configuration: [docs/CROSS-REPO-CONFIG-LINKAGES.md](../docs/CROSS-REPO-CONFIG-LINKAGES.md)
+
 ## Troubleshooting
 
 - **Plugins missing**: Press `Ctrl-b + I` in tmux
