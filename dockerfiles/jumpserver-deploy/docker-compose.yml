@@ -1,0 +1,94 @@
+version: '3'
+services:
+  web:
+    image: nginx:alpine
+    container_name: jms_web
+    restart: always
+    ports:
+      - "${HTTP_PORT}:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./data:/opt/jumpserver/data
+    depends_on:
+      - core
+    networks:
+      - jms_net
+
+  core:
+    build: ./source
+    image: jumpserver/core:local
+    container_name: jms_core
+    restart: always
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - BOOTSTRAP_TOKEN=${BOOTSTRAP_TOKEN}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+    volumes:
+      - ./data:/opt/jumpserver/data
+      - ./config.yml:/opt/jumpserver/config.yml
+    depends_on:
+      - db
+      - redis
+    networks:
+      - jms_net
+
+  db:
+    image: postgres:16-alpine
+    container_name: jms_db
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - jms_net
+
+  redis:
+    image: redis:6-alpine
+    container_name: jms_redis
+    restart: always
+    networks:
+      - jms_net
+
+  koko:
+    image: jumpserver/koko:v3.10.14
+    container_name: jms_koko
+    restart: always
+    ports:
+      - "${SSH_PORT}:2222"
+    environment:
+      - CORE_HOST=http://core:8080
+      - BOOTSTRAP_TOKEN=${BOOTSTRAP_TOKEN}
+    depends_on:
+      - core
+    networks:
+      - jms_net
+
+  lion:
+    image: jumpserver/lion:v3.10.14
+    container_name: jms_lion
+    restart: always
+    ports:
+      - "${RDP_PORT}:8081"
+    environment:
+      - CORE_HOST=http://core:8080
+      - BOOTSTRAP_TOKEN=${BOOTSTRAP_TOKEN}
+    depends_on:
+      - core
+    networks:
+      - jms_net
+
+networks:
+  jms_net:
+    driver: bridge
+
+volumes:
+  db_data:

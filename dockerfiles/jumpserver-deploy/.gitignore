@@ -1,0 +1,14 @@
+# Data
+data/
+source/
+
+# Config
+.env
+config.yml
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs
+logs/
