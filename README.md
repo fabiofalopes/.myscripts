@@ -17,6 +17,19 @@ export PATH=$PATH:/home/$USER/.myscripts
 - **docs/**: Documentation and guides
 - **tmux/**: tmux configuration and setup scripts
 
+## Utility Scripts
+
+### Media Conversion
+- **`flac2mp3.sh`** - Bulk convert FLAC audio files to MP3
+- **`heic2jpg.sh`** - Bulk convert HEIC images to JPG (ImageMagick/heif-convert)
+  - Quick ref: `docs/heic2jpg-quickref.md`
+
+## Skills
+
+The `skills/` folder contains resumption guides for multi-session projects. These help AI agents pick up where previous sessions left off.
+
+- **`heic2jpg-resume.md`** - Resume/maintain heic2jpg.sh
+
 ## Obsidian Integration (Optional)
 
 To edit patterns in Obsidian while keeping them tracked here:
