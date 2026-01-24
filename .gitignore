@@ -20,3 +20,4 @@ AGENTS.md
 
 # MLX ecosystem (has its own venv, keep separate)
 mlx-ecosystem/
+pipeline-errors.log
