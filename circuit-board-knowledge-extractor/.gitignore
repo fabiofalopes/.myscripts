@@ -1,0 +1,24 @@
+# Data directories (large files)
+data/source/
+data/converted/
+data/pass1/
+data/pass2/
+data/pass3/
+data/pass4/
+data/pass5/
+
+# Logs
+*.log
+pipeline-errors.log
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Output
+output/
