@@ -1,0 +1,410 @@
+#!/usr/bin/env python3
+"""
+or-model-select — Pick the best available OpenRouter free model from benchmark cache
+
+Reads the most recent or-bench cache and recommends a model based on task type.
+Output is shell-eval-able: sets FABRIC_MODEL and FABRIC_VENDOR.
+
+Usage:
+  eval $(or-model-select)                  # Best available model (general)
+  eval $(or-model-select --for fast)       # Fastest model above minimum params
+  eval $(or-model-select --for analysis)   # Best for structured output / reasoning
+  eval $(or-model-select --for creative)   # Best for prose / open-ended writing
+  eval $(or-model-select --for coding)     # Best for code generation
+
+  or-model-select --show                   # Print ranked candidates (human-readable)
+  or-model-select --show --for analysis    # Show candidates for a task type
+  or-model-select --json                   # Output JSON instead of shell vars
+  or-model-select --model-only             # Print only the model slug (no shell syntax)
+
+Filters (applied before ranking):
+  --min-params N           Minimum active params in B (default: 7)
+  --min-context N          Minimum context in K tokens (default: 32)
+  --no-training            Exclude models that train on your data
+  --exclude-provider NAME  Exclude a specific provider
+  --max-age N              Reject cache older than N hours (default: 48)
+  --cache-dir PATH         Custom cache directory
+
+Fallback:
+  If no cache exists or no model passes filters, prints the fabric default and exits 0.
+  The default is: stepfun/step-3.5-flash:free (via OpenRouter)
+"""
+
+import sys
+import os
+import json
+import argparse
+from pathlib import Path
+from datetime import datetime
+
+# ── Defaults ─────────────────────────────────────────────────────────────────
+
+DEFAULT_CACHE_DIR  = Path.home() / ".cache" / "or-bench"
+DEFAULT_MIN_PARAMS = 7       # B — filter out tiny models
+DEFAULT_MIN_CTX    = 32      # K tokens
+DEFAULT_MAX_AGE    = 48      # hours before cache is considered too stale
+
+# Hardcoded fallback (what fabric uses if we can't recommend anything)
+FALLBACK_MODEL  = "stepfun/step-3.5-flash:free"
+FALLBACK_VENDOR = "OpenRouter"
+
+# ── Task profiles ─────────────────────────────────────────────────────────────
+# Each profile defines ranking weights and hard filters.
+#
+# Ranking score = tps_weight * norm_tps
+#               + params_weight * norm_active_params
+#               + ctx_weight * norm_context
+#               + privacy_bonus (if no training)
+#               + availability_bonus (from history)
+#
+# "min_params" overrides the CLI default for that task type.
+
+TASK_PROFILES = {
+    "fast": {
+        "description": "Fastest model above minimum capability threshold",
+        "tps_weight":    1.0,
+        "params_weight": 0.1,
+        "ctx_weight":    0.0,
+        "min_params":    7,   # don't recommend toy models for fast
+        "prefer_no_training": False,
+    },
+    "analysis": {
+        "description": "Best for structured output, summarization, reasoning",
+        "tps_weight":    0.3,
+        "params_weight": 1.0,
+        "ctx_weight":    0.4,
+        "min_params":    10,  # analysis needs real capability
+        "prefer_no_training": True,
+    },
+    "creative": {
+        "description": "Best for prose, writing, open-ended generation",
+        "tps_weight":    0.4,
+        "params_weight": 0.8,
+        "ctx_weight":    0.5,
+        "min_params":    10,
+        "prefer_no_training": True,
+    },
+    "coding": {
+        "description": "Best for code generation and debugging",
+        "tps_weight":    0.4,
+        "params_weight": 1.0,
+        "ctx_weight":    0.3,
+        "min_params":    14,  # coding benefits from larger models
+        "prefer_no_training": True,
+    },
+    "general": {
+        "description": "Balanced — good speed, decent size, reasonable context",
+        "tps_weight":    0.5,
+        "params_weight": 0.5,
+        "ctx_weight":    0.2,
+        "min_params":    7,
+        "prefer_no_training": False,
+    },
+}
+
+# ── Cache helpers ─────────────────────────────────────────────────────────────
+
+def get_latest_cache(cache_dir):
+    if not cache_dir.exists():
+        return None
+    files = sorted(cache_dir.glob("*.json"), reverse=True)
+    return files[0] if files else None
+
+def cache_age_hours(path):
+    import time
+    return (time.time() - path.stat().st_mtime) / 3600
+
+def load_cache(path):
+    with open(path) as f:
+        return json.load(f)
+
+def get_all_cache_files(cache_dir):
+    if not cache_dir.exists():
+        return []
+    return sorted(cache_dir.glob("*.json"))
+
+# ── Param parsing (mirrors or-bench) ─────────────────────────────────────────
+# Inline copy so or-model-select is standalone (no import of or-bench).
+
+import re as _re
+_PARAM_RE = _re.compile(r'(\d+\.?\d*)b(?:-a(\d+\.?\d*)b)?', _re.IGNORECASE)
+
+PARAM_OVERRIDES = {
+    "stepfun/step-3.5-flash":           (196,  11),
+    "arcee-ai/trinity-large-preview":   (400,  13),
+    "arcee-ai/trinity-mini":            (26,    3),
+    "upstage/solar-pro-3":              (102,  12),
+    "z-ai/glm-4.5-air":                (0,     0),
+    "qwen/qwen3-coder":                (480,  35),
+    "deepseek/deepseek-r1-0528":       (671,  37),
+}
+
+def parse_params(slug):
+    if slug in PARAM_OVERRIDES:
+        t, a = PARAM_OVERRIDES[slug]
+        return (t or None, a or None)
+    name_part = slug.split("/")[-1]
+    m = _PARAM_RE.search(name_part)
+    if m:
+        total = float(m.group(1))
+        active = float(m.group(2)) if m.group(2) else total
+        return (total, active)
+    return (None, None)
+
+# ── Availability history ──────────────────────────────────────────────────────
+
+def compute_availability(cache_dir, slug):
+    """Return fraction of runs where model succeeded (0.0–1.0)."""
+    files = get_all_cache_files(cache_dir)
+    if not files:
+        return None
+    success = 0
+    total = 0
+    for f in files:
+        try:
+            data = load_cache(f)
+            for r in data.get("results", []):
+                if r["slug"] == slug:
+                    total += 1
+                    if r.get("status") == "ok":
+                        success += 1
+        except Exception:
+            pass
+    return (success / total) if total > 0 else None
+
+# ── Candidate building ────────────────────────────────────────────────────────
+
+def build_candidates(data, args, profile):
+    """
+    Merge models + results from cache data, apply filters, return candidate list.
+    Each candidate is a flat dict ready for scoring.
+    """
+    meta = {m["slug"]: m for m in data.get("models", [])}
+    results_map = {}
+    for r in data.get("results", []):
+        slug = r["slug"]
+        if r.get("status") == "ok":
+            results_map[slug] = r
+
+    # Only consider models that succeeded in last run
+    candidates = []
+    for slug, result in results_map.items():
+        m = meta.get(slug, {})
+
+        provider = m.get("provider", "?")
+        training = m.get("data_policy", {}).get("training", False)
+        ctx_k = (m.get("context_length") or 0) // 1000
+
+        # Params: prefer cached value, fall back to parsing
+        params_total = m.get("params_total")
+        params_active = m.get("params_active")
+        if params_total is None:
+            params_total, params_active = parse_params(slug)
+
+        active_b = params_active if params_active is not None else params_total
+
+        # Hard filters
+        eff_min_params = args.min_params if args.min_params is not None else profile.get("min_params", DEFAULT_MIN_PARAMS)
+        if active_b is not None and active_b < eff_min_params:
+            continue
+
+        eff_min_ctx = args.min_context or DEFAULT_MIN_CTX
+        if ctx_k < eff_min_ctx:
+            continue
+
+        if args.no_training and training:
+            continue
+
+        if args.exclude_provider and args.exclude_provider.lower() in provider.lower():
+            continue
+
+        candidates.append({
+            "slug": slug,
+            "provider": provider,
+            "tps": result.get("tps", 0) or 0,
+            "ttfb_ms": result.get("ttfb_ms"),
+            "total_ms": result.get("total_ms"),
+            "output_tokens": result.get("output_tokens"),
+            "ctx_k": ctx_k,
+            "rpm": m.get("rpm"),
+            "training": training,
+            "params_total": params_total,
+            "params_active": params_active,
+            "active_b": active_b,
+        })
+
+    return candidates
+
+# ── Scoring ───────────────────────────────────────────────────────────────────
+
+def score_candidates(candidates, profile, cache_dir):
+    if not candidates:
+        return []
+
+    # Normalise each dimension to [0, 1]
+    tps_vals    = [c["tps"] for c in candidates]
+    param_vals  = [c["active_b"] or 0 for c in candidates]
+    ctx_vals    = [c["ctx_k"] for c in candidates]
+
+    max_tps    = max(tps_vals)   if max(tps_vals) > 0    else 1
+    max_params = max(param_vals) if max(param_vals) > 0  else 1
+    max_ctx    = max(ctx_vals)   if max(ctx_vals) > 0    else 1
+
+    tw = profile["tps_weight"]
+    pw = profile["params_weight"]
+    cw = profile["ctx_weight"]
+    prefer_private = profile.get("prefer_no_training", False)
+
+    scored = []
+    for c in candidates:
+        norm_tps    = c["tps"] / max_tps
+        norm_params = (c["active_b"] or 0) / max_params
+        norm_ctx    = c["ctx_k"] / max_ctx
+
+        score = tw * norm_tps + pw * norm_params + cw * norm_ctx
+
+        # Privacy bonus: +0.15 if model doesn't train on data and profile cares
+        if prefer_private and not c["training"]:
+            score += 0.15
+
+        # Rate-limit penalty: if rpm is very low (e.g. 8 = Venice), slight penalty
+        rpm = c["rpm"]
+        if rpm is not None and rpm <= 10:
+            score -= 0.05
+
+        c = dict(c)
+        c["score"] = round(score, 4)
+        scored.append(c)
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    return scored
+
+# ── Output formatters ─────────────────────────────────────────────────────────
+
+def params_str(total, active):
+    if total is None:
+        return "?"
+    if active is not None and active != total:
+        return f"{active:.0f}B/{total:.0f}B"
+    return f"{total:.0f}B"
+
+def print_candidates_table(scored, profile_name, profile, cache_note=""):
+    prof = TASK_PROFILES.get(profile_name, TASK_PROFILES["general"])
+    print(f"\nor-model-select  [{profile_name}]  —  {prof['description']}{cache_note}")
+    print(f"{'#':>2}  {'Model':<50} {'Provider':<18} {'Params':>10} {'TPS':>6} {'Ctx':>7} {'RPM':>5} {'Score':>7} {'Flags'}")
+    print("─" * 120)
+    for i, c in enumerate(scored, 1):
+        rpm_str = str(c["rpm"]) if c["rpm"] else "—"
+        ctx_str = f"{c['ctx_k']}k"
+        p_str   = params_str(c["params_total"], c["params_active"])
+        flags   = []
+        if c["training"]: flags.append("TRAIN")
+        flag_str = " ".join(flags)
+        marker = " *" if i == 1 else "  "
+        print(f"{i:>2}{marker}{c['slug']:<50} {c['provider']:<18} {p_str:>10} {c['tps']:>6.1f} {ctx_str:>7} {rpm_str:>5} {c['score']:>7.4f} {flag_str}")
+
+def emit_shell(model_slug, vendor="OpenRouter"):
+    """Print shell-eval-able export statements."""
+    model_id = model_slug if ":free" in model_slug else f"{model_slug}:free"
+    print(f'export FABRIC_MODEL="{model_id}"')
+    print(f'export FABRIC_VENDOR="{vendor}"')
+
+def emit_fallback(reason):
+    print(f"# or-model-select: {reason} — using fabric default", file=sys.stderr)
+    emit_shell(FALLBACK_MODEL, FALLBACK_VENDOR)
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Pick best OpenRouter free model from benchmark cache",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    parser.add_argument("--for", dest="task", default="general",
+                        choices=list(TASK_PROFILES.keys()),
+                        help="Task type (default: general)")
+    parser.add_argument("--show", action="store_true",
+                        help="Print ranked candidates table (human-readable)")
+    parser.add_argument("--json", action="store_true",
+                        help="Output JSON instead of shell vars")
+    parser.add_argument("--model-only", action="store_true",
+                        help="Print only the model slug, no shell syntax")
+
+    # Filters
+    parser.add_argument("--min-params", type=float, default=None, metavar="N",
+                        help=f"Minimum active params in B (default: per task, typically {DEFAULT_MIN_PARAMS})")
+    parser.add_argument("--min-context", type=int, default=None, metavar="N",
+                        help=f"Minimum context in K tokens (default: {DEFAULT_MIN_CTX}k)")
+    parser.add_argument("--no-training", action="store_true",
+                        help="Exclude models that train on your data")
+    parser.add_argument("--exclude-provider", type=str, default=None)
+    parser.add_argument("--max-age", type=int, default=DEFAULT_MAX_AGE, metavar="N",
+                        help=f"Reject cache older than N hours (default: {DEFAULT_MAX_AGE})")
+    parser.add_argument("--cache-dir", type=str, default=None)
+
+    args = parser.parse_args()
+
+    cache_dir = Path(args.cache_dir) if args.cache_dir else DEFAULT_CACHE_DIR
+    profile   = TASK_PROFILES[args.task]
+
+    # Load cache
+    latest = get_latest_cache(cache_dir)
+    if not latest:
+        emit_fallback("no cache found")
+        return
+
+    age = cache_age_hours(latest)
+    if age > args.max_age:
+        emit_fallback(f"cache is {age:.1f}h old (> {args.max_age}h)")
+        return
+
+    data = load_cache(latest)
+    cache_note = f"  (cache: {latest.name}, {age:.1f}h old)"
+
+    # Build + score candidates
+    candidates = build_candidates(data, args, profile)
+
+    if not candidates:
+        emit_fallback("no models passed filters")
+        return
+
+    scored = score_candidates(candidates, profile, cache_dir)
+
+    if not scored:
+        emit_fallback("scoring returned empty list")
+        return
+
+    best = scored[0]
+
+    # Output
+    if args.show:
+        print_candidates_table(scored, args.task, profile, cache_note)
+        print(f"\nSelected: {best['slug']}  (score={best['score']:.4f})")
+        return
+
+    if args.json:
+        print(json.dumps({
+            "model":        f"{best['slug']}:free",
+            "vendor":       "OpenRouter",
+            "task":         args.task,
+            "score":        best["score"],
+            "tps":          best["tps"],
+            "params_active": best["params_active"],
+            "ctx_k":        best["ctx_k"],
+            "training":     best["training"],
+            "cache":        latest.name,
+            "cache_age_h":  round(age, 1),
+        }, indent=2))
+        return
+
+    if args.model_only:
+        slug = best["slug"]
+        print(f"{slug}:free" if ":free" not in slug else slug)
+        return
+
+    emit_shell(best["slug"])
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,598 @@
+#!/usr/bin/env python3
+"""
+or-bench — OpenRouter free model benchmark & discovery
+
+Queries the OpenRouter frontend API for free text models,
+benchmarks them in parallel, and outputs a ranked table.
+
+Usage:
+  or-bench                  # Full benchmark (query API + call each model)
+  or-bench --list           # Just list free models from API (no calls)
+  or-bench --json           # Output results as JSON
+  or-bench --top N          # Show only top N results (default: all)
+  or-bench --workers N      # Parallel workers (default: 8)
+  or-bench --timeout N      # Per-model timeout in seconds (default: 30)
+
+Phase 2 features:
+  or-bench --last           # Show most recent cached result
+  or-bench --if-stale N     # Only run if cache older than N hours
+  or-bench --history        # Show performance history across runs
+  or-bench --min-context N  # Filter models with <Nk context
+  or-bench --min-params N   # Filter models with <N active params (e.g. 7 for 7B+)
+  or-bench --no-training    # Exclude models that train on your data
+  or-bench --exclude-provider NAME  # Exclude specific provider
+"""
+
+import sys
+import os
+import json
+import time
+import argparse
+import urllib.request
+import urllib.error
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
+
+# ── Config ──────────────────────────────────────────────────────────────────
+
+FRONTEND_API = "https://openrouter.ai/api/frontend/models"
+COMPLETIONS_API = "https://openrouter.ai/api/v1/chat/completions"
+
+BENCH_PROMPT = "Explain what a reverse proxy is in exactly 3 sentences."
+BENCH_MAX_TOKENS = 150
+
+DEFAULT_CACHE_DIR = Path.home() / ".cache" / "or-bench"
+
+# ── Param size data ──────────────────────────────────────────────────────────
+# Models whose param counts can't be parsed from the slug name.
+# Format: slug -> (total_B, active_B)
+# active_B == total_B for dense models, < total_B for MoE.
+PARAM_OVERRIDES = {
+    "stepfun/step-3.5-flash":           (196,  11),
+    "arcee-ai/trinity-large-preview":   (400,  13),
+    "arcee-ai/trinity-mini":            (26,    3),
+    "upstage/solar-pro-3":              (102,  12),
+    "z-ai/glm-4.5-air":                (0,     0),   # no public info
+    "qwen/qwen3-coder":                (480,  35),   # Qwen3-Coder-480B-A35B-Instruct
+    "deepseek/deepseek-r1-0528":       (671,  37),   # DeepSeek-R1 MoE
+}
+
+import re as _re
+_PARAM_RE = _re.compile(r'(\d+\.?\d*)b(?:-a(\d+\.?\d*)b)?', _re.IGNORECASE)
+
+def parse_params(slug):
+    """
+    Extract (total_B, active_B) from a model slug.
+    Returns (None, None) if unparseable.
+    Priority: PARAM_OVERRIDES > name regex > hf_slug regex.
+    """
+    if slug in PARAM_OVERRIDES:
+        t, a = PARAM_OVERRIDES[slug]
+        return (t or None, a or None)
+    name_part = slug.split("/")[-1]
+    m = _PARAM_RE.search(name_part)
+    if m:
+        total = float(m.group(1))
+        active = float(m.group(2)) if m.group(2) else total
+        return (total, active)
+    return (None, None)
+
+# ── Colors ──────────────────────────────────────────────────────────────────
+
+NO_COLOR = os.environ.get("NO_COLOR") is not None
+def _c(code, text):
+    if NO_COLOR or not sys.stderr.isatty():
+        return text
+    return f"\033[{code}m{text}\033[0m"
+
+def green(t):  return _c("0;32", t)
+def red(t):    return _c("0;31", t)
+def yellow(t): return _c("1;33", t)
+def cyan(t):   return _c("0;36", t)
+def bold(t):   return _c("1", t)
+def dim(t):    return _c("2", t)
+
+def status(msg):  print(f"{cyan('▶')} {msg}", file=sys.stderr)
+def ok(msg):      print(f"{green('✓')} {msg}", file=sys.stderr)
+def warn(msg):    print(f"{yellow('⚠')} {msg}", file=sys.stderr)
+def err(msg):     print(f"{red('✗')} {msg}", file=sys.stderr)
+
+# ── API key ─────────────────────────────────────────────────────────────────
+
+def get_api_key():
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if key:
+        return key
+    fabric_env = os.path.expanduser("~/.config/fabric/.env")
+    if os.path.exists(fabric_env):
+        with open(fabric_env) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("OPENROUTER_API_KEY="):
+                    return line.split("=", 1)[1].strip()
+    return None
+
+# ── Cache management ────────────────────────────────────────────────────────
+
+def get_cache_dir(args):
+    if args.cache_dir:
+        return Path(args.cache_dir)
+    return DEFAULT_CACHE_DIR
+
+def save_to_cache(cache_dir, data):
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    cache_file = cache_dir / f"{timestamp}.json"
+    with open(cache_file, "w") as f:
+        json.dump(data, f, indent=2)
+    return cache_file
+
+def get_latest_cache(cache_dir):
+    cache_files = sorted(cache_dir.glob("*.json"), reverse=True)
+    return cache_files[0] if cache_files else None
+
+def load_cache(cache_file):
+    with open(cache_file) as f:
+        return json.load(f)
+
+def get_cache_age_hours(cache_file):
+    if not cache_file or not cache_file.exists():
+        return None
+    mtime = cache_file.stat().st_mtime
+    age_seconds = time.time() - mtime
+    return age_seconds / 3600
+
+def get_all_cache_files(cache_dir):
+    if not cache_dir.exists():
+        return []
+    return sorted(cache_dir.glob("*.json"))
+
+# ── Fetch free models ───────────────────────────────────────────────────────
+
+def fetch_free_models(args):
+    status("Querying OpenRouter frontend API...")
+    req = urllib.request.Request(FRONTEND_API)
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read().decode())
+
+    models = []
+    seen_slugs = set()
+    for item in data.get("data", []):
+        ep = item.get("endpoint")
+        if not isinstance(ep, dict):
+            continue
+        if not ep.get("is_free"):
+            continue
+        if not item.get("has_text_output"):
+            continue
+        if ep.get("is_disabled"):
+            continue
+        if not ep.get("has_chat_completions"):
+            continue
+
+        slug = item.get("slug", "")
+        if slug in seen_slugs:
+            continue
+        seen_slugs.add(slug)
+
+        data_policy = ep.get("data_policy", {})
+        provider = ep.get("provider_display_name", ep.get("provider_name", "?"))
+        
+        if args.exclude_provider and args.exclude_provider.lower() in provider.lower():
+            continue
+        
+        min_ctx = args.min_context or 0
+        if ep.get("context_length", 0) < min_ctx * 1000:
+            continue
+        
+        if args.no_training and data_policy.get("training", False):
+            continue
+
+        params_total, params_active = parse_params(slug)
+
+        min_params = args.min_params or 0
+        if min_params and (params_active or 0) < min_params:
+            continue
+
+        models.append({
+            "slug": slug,
+            "name": item.get("name", slug),
+            "provider": provider,
+            "context_length": ep.get("context_length", 0),
+            "max_completion_tokens": ep.get("max_completion_tokens"),
+            "rpm": ep.get("limit_rpm"),
+            "rpd": ep.get("limit_rpd"),
+            "is_deranked": ep.get("is_deranked", False),
+            "data_policy": data_policy,
+            "quantization": ep.get("quantization"),
+            "params_total": params_total,
+            "params_active": params_active,
+        })
+
+    ok(f"Found {len(models)} free text models")
+    return models
+
+# ── Benchmark a single model ───────────────────────────────────────────────
+
+def benchmark_model(model, api_key, timeout_secs):
+    slug = model["slug"]
+    model_id = slug if ":free" in slug else f"{slug}:free"
+
+    payload = json.dumps({
+        "model": model_id,
+        "max_tokens": BENCH_MAX_TOKENS,
+        "messages": [{"role": "user", "content": BENCH_PROMPT}],
+    }).encode()
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+        "HTTP-Referer": "https://github.com/myscripts/or-bench",
+        "X-Title": "or-bench",
+    }
+
+    req = urllib.request.Request(COMPLETIONS_API, data=payload, headers=headers)
+
+    result = {
+        "slug": slug,
+        "model_id": model_id,
+        "status": "error",
+        "error": None,
+        "ttfb_ms": None,
+        "total_ms": None,
+        "output_tokens": None,
+        "tps": None,
+        "response_text": None,
+    }
+
+    t_start = time.monotonic()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_secs) as resp:
+            t_first_byte = time.monotonic()
+            body = resp.read().decode()
+            t_end = time.monotonic()
+
+        data = json.loads(body)
+
+        if "error" in data:
+            result["status"] = "api_error"
+            result["error"] = str(data["error"].get("message", data["error"]))[:120]
+            return result
+
+        usage = data.get("usage", {})
+        completion_tokens = usage.get("completion_tokens", 0)
+        choices = data.get("choices", [])
+        text = choices[0]["message"]["content"] if choices else ""
+
+        ttfb_ms = (t_first_byte - t_start) * 1000
+        total_ms = (t_end - t_start) * 1000
+        gen_time_s = (t_end - t_first_byte)
+        tps = completion_tokens / gen_time_s if gen_time_s > 0 and completion_tokens > 0 else 0
+
+        result.update({
+            "status": "ok",
+            "ttfb_ms": round(ttfb_ms),
+            "total_ms": round(total_ms),
+            "output_tokens": completion_tokens,
+            "tps": round(tps, 1),
+            "response_text": text[:200],
+        })
+
+    except urllib.error.HTTPError as e:
+        body = ""
+        try:
+            body = e.read().decode()[:200]
+        except:
+            pass
+        result["error"] = f"HTTP {e.code}: {body[:100]}"
+        result["status"] = f"http_{e.code}"
+
+    except urllib.error.URLError as e:
+        result["error"] = str(e.reason)[:100]
+
+    except TimeoutError:
+        result["error"] = f"timeout ({timeout_secs}s)"
+        result["status"] = "timeout"
+
+    except Exception as e:
+        result["error"] = str(e)[:100]
+
+    return result
+
+# ── Display ─────────────────────────────────────────────────────────────────
+
+def _params_str(total, active):
+    """Format param counts: '30B/3B' for MoE, '70B' for dense, '?' if unknown."""
+    if total is None:
+        return "?"
+    if active is not None and active != total:
+        return f"{active:.0f}B/{total:.0f}B"
+    return f"{total:.0f}B"
+
+def print_list(models):
+    print(f"\n{'Slug':<55} {'Provider':<20} {'Params':>10} {'Ctx':>8} {'RPM':>5} {'Flags'}")
+    print("─" * 110)
+    for m in sorted(models, key=lambda x: (x.get("params_active") or 0), reverse=True):
+        flags = []
+        if m.get("is_deranked"): flags.append("DERANKED")
+        if m.get("data_policy", {}).get("training"): flags.append("TRAIN")
+        flag_str = " ".join(flags)
+        rpm_str = str(m["rpm"]) if m["rpm"] else "—"
+        ctx = m.get("context_length", 0)
+        ctx_str = f"{ctx//1000}k" if ctx >= 1000 else str(ctx)
+        p_str = _params_str(m.get("params_total"), m.get("params_active"))
+        print(f"{m['slug']:<55} {m['provider']:<20} {p_str:>10} {ctx_str:>8} {rpm_str:>5} {flag_str}")
+
+def print_results(models, results, top_n=None, from_cache=None):
+    meta = {m["slug"]: m for m in models}
+    merged = []
+    for r in results:
+        m = meta.get(r["slug"], {})
+        merged.append({**m, **r})
+
+    successes = [r for r in merged if r["status"] == "ok"]
+    failures = [r for r in merged if r["status"] != "ok"]
+
+    successes.sort(key=lambda x: x.get("tps", 0), reverse=True)
+
+    if top_n:
+        successes = successes[:top_n]
+
+    cache_note = f" (from cache: {from_cache})" if from_cache else ""
+    print(f"\n{bold('OpenRouter Free Model Benchmark')}  —  {datetime.now().strftime('%Y-%m-%d %H:%M')}{cache_note}")
+    print(f"Prompt: \"{BENCH_PROMPT}\" (max {BENCH_MAX_TOKENS} tokens)\n")
+
+    if successes:
+        print(f" {'#':>2}  {'Model':<50} {'Provider':<18} {'Params':>10} {'TPS':>6} {'TTFB':>7} {'Total':>7} {'Tokens':>6} {'RPM':>5} {'Ctx':>8}")
+        print("─" * 145)
+        for i, r in enumerate(successes, 1):
+            rpm_str = str(r.get("rpm", "")) if r.get("rpm") else "—"
+            ctx = r.get("context_length", 0)
+            ctx_str = f"{ctx//1000}k" if ctx >= 1000 else str(ctx)
+            tps_str = f"{r['tps']:.1f}"
+            ttfb_str = f"{r['ttfb_ms']}ms"
+            total_str = f"{r['total_ms']}ms"
+            p_str = _params_str(r.get("params_total"), r.get("params_active"))
+
+            if r["tps"] >= 60:
+                tps_display = green(f"{tps_str:>6}")
+            elif r["tps"] >= 25:
+                tps_display = cyan(f"{tps_str:>6}")
+            elif r["tps"] >= 10:
+                tps_display = yellow(f"{tps_str:>6}")
+            else:
+                tps_display = red(f"{tps_str:>6}")
+
+            print(f" {i:>2}  {r['slug']:<50} {r.get('provider','?'):<18} {p_str:>10} {tps_display} {ttfb_str:>7} {total_str:>7} {r['output_tokens']:>6} {rpm_str:>5} {ctx_str:>8}")
+
+    if failures:
+        print(f"\n{bold(red('Failed'))} ({len(failures)}):")
+        for r in failures:
+            print(f"  {r['slug']:<50} {r['status']:<12} {dim(r.get('error','') or '')}")
+
+    total = len(successes) + len(failures)
+    print(f"\n{bold('Summary')}: {green(str(len(successes)))} succeeded, {red(str(len(failures)))} failed out of {total} models")
+
+def print_json_results(models, results, from_cache=None):
+    meta = {m["slug"]: m for m in models}
+    merged = []
+    for r in results:
+        m = meta.get(r["slug"], {})
+        merged.append({**m, **r})
+    merged.sort(key=lambda x: x.get("tps", 0) or 0, reverse=True)
+    output = {
+        "timestamp": datetime.now().isoformat(),
+        "from_cache": str(from_cache) if from_cache else None,
+        "prompt": BENCH_PROMPT,
+        "max_tokens": BENCH_MAX_TOKENS,
+        "total_models": len(merged),
+        "results": merged,
+    }
+    print(json.dumps(output, indent=2))
+
+# ── History ─────────────────────────────────────────────────────────────────
+
+def print_history(cache_dir, model_filter=None):
+    cache_files = get_all_cache_files(cache_dir)
+    if not cache_files:
+        err("No cached benchmark results found")
+        sys.exit(1)
+    
+    history = {}
+    for cf in cache_files:
+        try:
+            data = load_cache(cf)
+            run_time = data.get("timestamp", cf.stem)
+            for r in data.get("results", []):
+                slug = r["slug"]
+                if model_filter and model_filter.lower() not in slug.lower():
+                    continue
+                if slug not in history:
+                    history[slug] = []
+                history[slug].append({
+                    "time": run_time,
+                    "status": r.get("status"),
+                    "tps": r.get("tps"),
+                    "ttfb_ms": r.get("ttfb_ms"),
+                    "error": r.get("error"),
+                })
+        except Exception as e:
+            warn(f"Failed to load {cf}: {e}")
+    
+    if not history:
+        err(f"No models matching '{model_filter}' found in history")
+        sys.exit(1)
+    
+    print(f"\n{bold('Benchmark History')} — {len(cache_files)} runs\n")
+    
+    sorted_models = sorted(history.items(), key=lambda x: len([h for h in x[1] if h['status']=='ok']), reverse=True)
+    
+    for slug, runs in sorted_models:
+        successes = [r for r in runs if r["status"] == "ok"]
+        failures = [r for r in runs if r["status"] != "ok"]
+        
+        if successes:
+            avg_tps = sum(r["tps"] for r in successes if r["tps"]) / len(successes)
+            avg_ttfb = sum(r["ttfb_ms"] for r in successes if r["ttfb_ms"]) / len(successes)
+            tps_str = f"{avg_tps:.1f}"
+            ttfb_str = f"{avg_ttfb:.0f}ms"
+        else:
+            tps_str = "—"
+            ttfb_str = "—"
+        
+        avail_str = f"{len(successes)}/{len(runs)}"
+        print(f"{slug:<50} {green(avail_str):>8}  TPS: {cyan(tps_str):>6}  TTFB: {ttfb_str:>7}")
+        
+        if failures and len(failures) <= 3:
+            for f in failures[-3:]:
+                print(f"  {dim(f['time'] + ': ' + (f.get('error') or f['status']))}")
+
+# ── Main ────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="OpenRouter free model benchmark & discovery",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    # Phase 1 args
+    parser.add_argument("--list", action="store_true", help="Just list free models (no benchmark)")
+    parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument("--top", type=int, default=None, help="Show only top N results")
+    parser.add_argument("--workers", type=int, default=8, help="Parallel workers (default: 8)")
+    parser.add_argument("--timeout", type=int, default=30, help="Per-model timeout in seconds (default: 30)")
+    
+    # Phase 2 args - caching
+    parser.add_argument("--cache-dir", type=str, default=None, help="Custom cache directory")
+    parser.add_argument("--last", action="store_true", help="Show most recent cached result")
+    parser.add_argument("--if-stale", type=int, default=None, metavar="N", help="Only run if cache older than N hours")
+    parser.add_argument("--no-cache", action="store_true", help="Don't save results to cache")
+    
+    # Phase 2 args - filters
+    parser.add_argument("--min-context", type=int, default=None, metavar="N", help="Minimum context in K tokens (e.g., 32 for 32k)")
+    parser.add_argument("--no-training", action="store_true", help="Exclude models that train on your data")
+    parser.add_argument("--exclude-provider", type=str, default=None, help="Exclude models from this provider")
+    
+    # Phase 2 args - history
+    parser.add_argument("--history", type=str, nargs="?", const="", default=None, metavar="MODEL", help="Show history (optionally filter by model)")
+    
+    # Phase 2 args - param filter
+    parser.add_argument("--min-params", type=int, default=None, metavar="N", help="Minimum active params in B (e.g., 7 for 7B+)")
+    
+    args = parser.parse_args()
+    
+    cache_dir = get_cache_dir(args)
+    
+    # --history mode
+    if args.history is not None:
+        print_history(cache_dir, args.history if args.history else None)
+        return
+    
+    # --last mode
+    if args.last:
+        latest = get_latest_cache(cache_dir)
+        if not latest:
+            err("No cached results found. Run a benchmark first.")
+            sys.exit(1)
+        data = load_cache(latest)
+        if args.json:
+            print(json.dumps(data, indent=2))
+        else:
+            print_results(data.get("models", []), data.get("results", []), args.top, from_cache=latest.name)
+        return
+    
+    # --if-stale check
+    if args.if_stale is not None:
+        latest = get_latest_cache(cache_dir)
+        age = get_cache_age_hours(latest) if latest else None
+        if age is not None and age < args.if_stale:
+            ok(f"Cache is {age:.1f}h old (< {args.if_stale}h), showing cached results")
+            data = load_cache(latest)
+            if args.json:
+                print(json.dumps(data, indent=2))
+            else:
+                print_results(data.get("models", []), data.get("results", []), args.top, from_cache=latest.name)
+            return
+        elif latest:
+            status(f"Cache is {age:.1f}h old (>= {args.if_stale}h), running fresh benchmark")
+    
+    # Fetch models
+    try:
+        models = fetch_free_models(args)
+    except Exception as e:
+        err(f"Failed to query OpenRouter API: {e}")
+        sys.exit(1)
+
+    if not models:
+        err("No free text models found")
+        sys.exit(1)
+
+    # --list mode
+    if args.list:
+        if args.json:
+            print(json.dumps(models, indent=2))
+        else:
+            print_list(models)
+        return
+
+    # Get API key
+    api_key = get_api_key()
+    if not api_key:
+        err("No OpenRouter API key found.")
+        err("Set OPENROUTER_API_KEY env var or configure in ~/.config/fabric/.env")
+        sys.exit(1)
+    ok("API key loaded")
+
+    # Benchmark
+    status(f"Benchmarking {len(models)} models ({args.workers} workers, {args.timeout}s timeout)...")
+    print("", file=sys.stderr)
+
+    results = []
+    completed = 0
+    total = len(models)
+
+    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+        futures = {
+            pool.submit(benchmark_model, m, api_key, args.timeout): m
+            for m in models
+        }
+        for future in as_completed(futures):
+            model = futures[future]
+            completed += 1
+            try:
+                result = future.result()
+                results.append(result)
+                slug_short = model["slug"].split("/")[-1][:30]
+                if result["status"] == "ok":
+                    print(f"  [{completed:>2}/{total}] {green('✓')} {slug_short:<32} {result['tps']:>6.1f} t/s  {result['total_ms']:>5}ms", file=sys.stderr)
+                else:
+                    print(f"  [{completed:>2}/{total}] {red('✗')} {slug_short:<32} {result.get('error','')[:40]}", file=sys.stderr)
+            except Exception as e:
+                results.append({"slug": model["slug"], "status": "error", "error": str(e)[:100]})
+                print(f"  [{completed:>2}/{total}] {red('✗')} {model['slug']:<32} {str(e)[:40]}", file=sys.stderr)
+
+    print("", file=sys.stderr)
+    ok("Benchmark complete")
+
+    # Save to cache
+    if not args.no_cache:
+        output_data = {
+            "timestamp": datetime.now().isoformat(),
+            "prompt": BENCH_PROMPT,
+            "max_tokens": BENCH_MAX_TOKENS,
+            "total_models": len(results),
+            "results": results,
+            "models": models,
+        }
+        cache_file = save_to_cache(cache_dir, output_data)
+        ok(f"Saved to {cache_file}")
+
+    # Output
+    if args.json:
+        print_json_results(models, results)
+    else:
+        print_results(models, results, top_n=args.top)
+
+
+if __name__ == "__main__":
+    main()

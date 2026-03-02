@@ -1,0 +1,222 @@
+#!/bin/bash
+# slugfile — rename files to clean slugified names
+#
+# Uses the system `slugify` command (npm: @sindresorhus/slugify-cli)
+# to rename files. Preserves extensions. Handles directories of files.
+#
+# Usage:
+#   slugfile document.md                    # rename single file
+#   slugfile *.md                           # rename multiple files
+#   slugfile -r ./messy-folder/             # recursive
+#   slugfile -n *.md                        # dry-run (preview only)
+#   echo "some text" | slugfile             # stdin: just print the slug (no rename)
+#
+# Flags:
+#   -h, --help         Show usage
+#   -n, --dry-run      Preview renames without executing
+#   -r, --recursive    Recurse into directories
+#   -f, --force        Overwrite existing files (default: skip)
+#   -e, --ext EXT      Also change extension (e.g. -e txt)
+
+set -e
+set -o pipefail
+
+# ---------------------------------------------------------------------------
+# Colors (disabled if not a terminal)
+# ---------------------------------------------------------------------------
+if [ -t 1 ]; then
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    RED='\033[0;31m'
+    CYAN='\033[0;36m'
+    BOLD='\033[1m'
+    DIM='\033[2m'
+    NC='\033[0m'
+else
+    GREEN='' YELLOW='' RED='' CYAN='' BOLD='' DIM='' NC=''
+fi
+
+# ---------------------------------------------------------------------------
+# Check slugify is available
+# ---------------------------------------------------------------------------
+if ! command -v slugify &> /dev/null; then
+    echo -e "${RED}error:${NC} 'slugify' command not found." >&2
+    echo "Install with: npm install -g @sindresorhus/slugify-cli" >&2
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Usage
+# ---------------------------------------------------------------------------
+usage() {
+    echo -e "${BOLD}slugfile${NC} — rename files to clean slugified names"
+    echo ""
+    echo -e "${BOLD}USAGE${NC}"
+    echo "  slugfile [FLAGS] FILE [FILE...]"
+    echo "  slugfile [FLAGS] -r DIRECTORY"
+    echo "  echo \"text\" | slugfile              # just print the slug"
+    echo ""
+    echo -e "${BOLD}FLAGS${NC}"
+    echo "  -h, --help         Show this help"
+    echo "  -n, --dry-run      Preview renames, don't execute"
+    echo "  -r, --recursive    Recurse into directories"
+    echo "  -f, --force        Overwrite if target exists (default: skip)"
+    echo "  -e, --ext EXT      Change extension (e.g. -e txt)"
+    echo ""
+    echo -e "${BOLD}EXAMPLES${NC}"
+    echo "  slugfile \"My Document (Final).md\"    # -> my-document-final.md"
+    echo "  slugfile -n *.md                      # preview all renames"
+    echo "  slugfile -r ./notes/                  # rename everything recursively"
+    echo "  slugfile -r -e md ./notes/            # rename + force .md extension"
+    echo ""
+    echo -e "${DIM}Preserves file extensions. Uses @sindresorhus/slugify-cli.${NC}"
+    exit 0
+}
+
+# ---------------------------------------------------------------------------
+# Core: slugify a filename (preserving extension)
+# ---------------------------------------------------------------------------
+slugify_name() {
+    local basename="$1"
+    local ext=""
+    local name=""
+
+    # Extract extension (handle .tar.gz etc.)
+    case "$basename" in
+        *.tar.gz)  ext=".tar.gz"; name="${basename%.tar.gz}" ;;
+        *.tar.bz2) ext=".tar.bz2"; name="${basename%.tar.bz2}" ;;
+        *.tar.xz)  ext=".tar.xz"; name="${basename%.tar.xz}" ;;
+        *.*)       ext=".${basename##*.}"; name="${basename%.*}" ;;
+        *)         ext=""; name="$basename" ;;
+    esac
+
+    # Override extension if -e flag was used
+    if [ -n "$NEW_EXT" ]; then
+        ext=".${NEW_EXT}"
+    fi
+
+    # Slugify just the name part
+    local slug
+    slug=$(slugify "$name" 2>/dev/null) || {
+        # Fallback: basic slugify in bash if the command fails
+        slug=$(echo "$name" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//')
+    }
+
+    echo "${slug}${ext}"
+}
+
+# ---------------------------------------------------------------------------
+# Parse arguments
+# ---------------------------------------------------------------------------
+DRY_RUN=false
+RECURSIVE=false
+FORCE=false
+NEW_EXT=""
+FILES=()
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help)     usage ;;
+        -n|--dry-run)  DRY_RUN=true; shift ;;
+        -r|--recursive) RECURSIVE=true; shift ;;
+        -f|--force)    FORCE=true; shift ;;
+        -e|--ext)      NEW_EXT="$2"; shift 2 ;;
+        --)            shift; FILES+=("$@"); break ;;
+        -*)            echo -e "${RED}error:${NC} unknown flag '$1'" >&2; exit 1 ;;
+        *)             FILES+=("$1"); shift ;;
+    esac
+done
+
+# ---------------------------------------------------------------------------
+# Stdin mode: just print the slug (no file rename)
+# ---------------------------------------------------------------------------
+if [ ${#FILES[@]} -eq 0 ] && [ -p /dev/stdin ] || [ ! -t 0 ] && [ ${#FILES[@]} -eq 0 ]; then
+    while IFS= read -r line; do
+        slugify "$line" 2>/dev/null || echo "$line" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//'
+    done
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# No files?
+# ---------------------------------------------------------------------------
+if [ ${#FILES[@]} -eq 0 ]; then
+    echo -e "${RED}error:${NC} no files specified" >&2
+    echo "Usage: slugfile [FLAGS] FILE [FILE...]" >&2
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Collect all file paths
+# ---------------------------------------------------------------------------
+ALL_FILES=()
+
+for target in "${FILES[@]}"; do
+    if [ -d "$target" ]; then
+        if $RECURSIVE; then
+            while IFS= read -r -d '' f; do
+                ALL_FILES+=("$f")
+            done < <(find "$target" -type f -print0 | sort -z)
+        else
+            while IFS= read -r -d '' f; do
+                ALL_FILES+=("$f")
+            done < <(find "$target" -maxdepth 1 -type f -print0 | sort -z)
+        fi
+    elif [ -f "$target" ]; then
+        ALL_FILES+=("$target")
+    else
+        echo -e "${YELLOW}warning:${NC} '$target' not found, skipping" >&2
+    fi
+done
+
+if [ ${#ALL_FILES[@]} -eq 0 ]; then
+    echo -e "${RED}error:${NC} no files found" >&2
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Process renames
+# ---------------------------------------------------------------------------
+renamed=0
+skipped=0
+unchanged=0
+
+for filepath in "${ALL_FILES[@]}"; do
+    dir=$(dirname "$filepath")
+    basename=$(basename "$filepath")
+    new_basename=$(slugify_name "$basename")
+
+    # Skip if already slugified
+    if [ "$basename" = "$new_basename" ]; then
+        ((unchanged++))
+        continue
+    fi
+
+    new_path="${dir}/${new_basename}"
+
+    # Handle collision
+    if [ -e "$new_path" ] && ! $FORCE; then
+        echo -e "${YELLOW}  skip${NC} ${basename} -> ${new_basename} ${DIM}(target exists)${NC}"
+        ((skipped++))
+        continue
+    fi
+
+    if $DRY_RUN; then
+        echo -e "${CYAN}  would${NC} ${DIM}${basename}${NC} -> ${BOLD}${new_basename}${NC}"
+    else
+        mv "$filepath" "$new_path"
+        echo -e "${GREEN}  done${NC} ${DIM}${basename}${NC} -> ${BOLD}${new_basename}${NC}"
+    fi
+    ((renamed++))
+done
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+if [ -t 1 ]; then
+    total=${#ALL_FILES[@]}
+    action="renamed"
+    $DRY_RUN && action="would rename"
+    echo ""
+    echo -e "${DIM}${action}: ${renamed}  skipped: ${skipped}  unchanged: ${unchanged}  total: ${total}${NC}"
+fi
