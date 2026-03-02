@@ -1,0 +1,509 @@
+#!/usr/bin/env bash
+# mfab — man-page-aware Fabric REPL
+# Usage: mfab [--setup] [--help]
+set -euo pipefail
+
+# ── Script location ───────────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PATTERNS_SRC="$SCRIPT_DIR/fabric-custom-patterns"
+
+# ── Load .env ─────────────────────────────────────────────────────────────────
+# Priority: $MFAB_ENV > ~/.config/mfab/.env > $SCRIPT_DIR/mfab.env > ./.env
+_load_env() {
+  local candidates=(
+    "${MFAB_ENV:-}"
+    "${HOME}/.config/mfab/.env"
+    "${SCRIPT_DIR}/mfab.env"
+    "./.env"
+  )
+  for f in "${candidates[@]}"; do
+    if [[ -n "$f" && -f "$f" ]]; then
+      # shellcheck source=/dev/null
+      set -a; source "$f"; set +a
+      break
+    fi
+  done
+}
+_load_env
+
+# ── Resolved config (env overrides .env overrides defaults) ───────────────────
+FABRIC_CFG="${HOME}/.config/fabric"
+FABRIC_PATTERNS_DIR="${FABRIC_CFG}/patterns"
+FABRIC_CONTEXTS_DIR="${FABRIC_CFG}/contexts"
+MFAB_CFG="${HOME}/.config/mfab"
+
+MFAB_CONTEXTS_DIR="${MFAB_CONTEXTS_DIR:-${MFAB_CFG}/man-contexts}"
+MFAB_ARCHIVE_DIR="${MFAB_ARCHIVE_DIR:-${MFAB_CFG}/archive}"
+FABRIC_CTX="${MFAB_FABRIC_CTX:-${FABRIC_CONTEXTS_DIR}/mfab-active.md}"
+
+# Vault: MFAB_OBSV > OBSV > OBSVAULT
+OBSV="${MFAB_OBSV:-${OBSV:-${OBSVAULT:-}}}"
+MFAB_OBSV_DIR="${MFAB_OBSV_DIR:-mfab}"
+
+# Models
+MFAB_ROUTER="${MFAB_ROUTER:-}"
+MFAB_MODEL="${MFAB_MODEL:-}"
+MFAB_VENDOR="${MFAB_VENDOR:-OpenRouter}"
+MFAB_ROUTER_VENDOR="${MFAB_ROUTER_VENDOR:-${MFAB_VENDOR}}"
+MFAB_MODEL_FALLBACK="${MFAB_MODEL_FALLBACK:-none}"
+MFAB_FALLBACK_VENDOR="${MFAB_FALLBACK_VENDOR:-${MFAB_VENDOR}}"
+MFAB_TITLER="${MFAB_TITLER:-none}"
+MFAB_TITLER_VENDOR="${MFAB_TITLER_VENDOR:-${MFAB_VENDOR}}"
+
+# Behaviour
+MFAB_STREAM="${MFAB_STREAM:-1}"
+TOKEN_WARN="${MFAB_TOKEN_WARN:-80000}"
+MFAB_SESSION_PREFIX="${MFAB_SESSION_PREFIX:-mfab}"
+MFAB_COMPACT_THRESHOLD="${MFAB_COMPACT_THRESHOLD:-20}"
+MFAB_TITLE_FALLBACK="${MFAB_TITLE_FALLBACK:-{date}-{tool}}"
+
+# Turn counter for compaction
+TURN_COUNT=0
+SESSION_NAME="${MFAB_SESSION_PREFIX}-$(date +%Y%m%d-%H%M%S)"
+
+# Router skip words (connective follow-ups)
+SKIP_ROUTER_WORDS="^(and|but|also|so|then|what about|how about|wait|actually|oh|hmm|ok|okay|now)"
+
+# ── Binary detection ──────────────────────────────────────────────────────────
+if command -v fabric-ai &>/dev/null; then
+  FABRIC_BIN="fabric-ai"
+elif command -v fabric &>/dev/null; then
+  FABRIC_BIN="fabric"
+else
+  echo "ERROR: fabric-ai (or fabric) not found in PATH" >&2
+  exit 1
+fi
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+# Build vendor flag array for a given vendor string
+# Usage: vendor_flags "OpenRouter"  → (-V "OpenRouter")
+#        vendor_flags ""            → ()
+vendor_flags() {
+  local v="$1"
+  if [[ -n "$v" ]]; then
+    echo "-V" "$v"
+  fi
+}
+
+# Run fabric with automatic fallback on failure
+# Usage: fabric_call <model> <vendor> [extra args...] <<< input
+fabric_call() {
+  local model="$1" vendor="$2"
+  shift 2
+  local extra_args=("$@")
+
+  local vflags=()
+  [[ -n "$vendor" ]] && vflags=(-V "$vendor")
+
+  if "$FABRIC_BIN" "${vflags[@]}" -m "$model" "${extra_args[@]}"; then
+    return 0
+  fi
+
+  # Primary failed — try fallback
+  if [[ "$MFAB_MODEL_FALLBACK" != "none" && -n "$MFAB_MODEL_FALLBACK" ]]; then
+    echo "[mfab] primary model failed, trying fallback: $MFAB_MODEL_FALLBACK" >&2
+    local fvflags=()
+    [[ -n "$MFAB_FALLBACK_VENDOR" ]] && fvflags=(-V "$MFAB_FALLBACK_VENDOR")
+    "$FABRIC_BIN" "${fvflags[@]}" -m "$MFAB_MODEL_FALLBACK" "${extra_args[@]}"
+  else
+    return 1
+  fi
+}
+
+check_required_vars() {
+  [[ -z "$MFAB_ROUTER" ]] && die "MFAB_ROUTER is not set.
+Set it in ~/.config/mfab/.env or export it:
+  export MFAB_ROUTER='arcee-ai/trinity-mini:free'"
+
+  [[ -z "$MFAB_MODEL" ]] && die "MFAB_MODEL is not set.
+Set it in ~/.config/mfab/.env or export it:
+  export MFAB_MODEL='arcee-ai/trinity-large-preview:free'"
+}
+
+# ── Setup ─────────────────────────────────────────────────────────────────────
+cmd_setup() {
+  echo "==> mfab --setup"
+
+  mkdir -p "$FABRIC_PATTERNS_DIR" "$FABRIC_CONTEXTS_DIR" \
+           "$MFAB_CONTEXTS_DIR" "$MFAB_ARCHIVE_DIR"
+
+  # Symlink patterns into fabric config
+  local patterns=(man-router man-expert man-ssh man-titler session-to-note ssh obsidian_note_polish)
+  for p in "${patterns[@]}"; do
+    local src="${PATTERNS_SRC}/${p}"
+    local dst="${FABRIC_PATTERNS_DIR}/${p}"
+    if [[ ! -d "$src" ]]; then
+      echo "  SKIP  $p (source dir not found: $src)"
+      continue
+    fi
+    if [[ -L "$dst" ]]; then
+      echo "  EXISTS $p -> $(readlink "$dst")"
+    elif [[ -d "$dst" ]]; then
+      echo "  WARN  $p already exists as real dir — skipping"
+    else
+      ln -s "$src" "$dst"
+      echo "  LINK  $p -> $src"
+    fi
+  done
+
+  # Install .env template to ~/.config/mfab/.env if not present
+  local env_dst="${HOME}/.config/mfab/.env"
+  if [[ ! -f "$env_dst" ]]; then
+    cp "${SCRIPT_DIR}/mfab.env" "$env_dst"
+    echo "  INSTALL ~/.config/mfab/.env (from mfab.env template)"
+  else
+    echo "  EXISTS  ~/.config/mfab/.env"
+  fi
+
+  # Seed man-contexts/ssh.md
+  local ssh_ctx="${MFAB_CONTEXTS_DIR}/ssh.md"
+  if [[ ! -f "$ssh_ctx" ]]; then
+    cp "${PATTERNS_SRC}/ssh/USER.md" "$ssh_ctx"
+    echo "  SEED    ~/.config/mfab/man-contexts/ssh.md"
+  else
+    echo "  EXISTS  ~/.config/mfab/man-contexts/ssh.md"
+  fi
+
+  echo ""
+  echo "==> Done."
+  echo "    Edit ~/.config/mfab/.env to configure models, then run: mfab"
+}
+
+# ── Context loader ─────────────────────────────────────────────────────────────
+load_context() {
+  local tool="$1"
+  local curated="${MFAB_CONTEXTS_DIR}/${tool}.md"
+
+  mkdir -p "$FABRIC_CONTEXTS_DIR"
+
+  if [[ -f "$curated" ]]; then
+    cp "$curated" "$FABRIC_CTX"
+    echo "[mfab] context: curated (man-contexts/${tool}.md)" >&2
+    return 0
+  fi
+
+  if command -v man &>/dev/null && man "$tool" &>/dev/null 2>&1; then
+    { echo "# MAN PAGE: $tool"; echo ""; man "$tool" | col -b; } > "$FABRIC_CTX"
+    echo "[mfab] context: man $tool" >&2
+    return 0
+  fi
+
+  if "$tool" --help &>/dev/null 2>&1; then
+    { echo "# HELP: $tool --help"; echo ""; "$tool" --help 2>&1; } > "$FABRIC_CTX"
+    echo "[mfab] context: $tool --help" >&2
+    return 0
+  fi
+
+  echo "# No context found for: $tool" > "$FABRIC_CTX"
+  echo "[mfab] WARN: no context found for '$tool'" >&2
+}
+
+check_token_size() {
+  if [[ -f "$FABRIC_CTX" ]]; then
+    local chars token_est
+    chars=$(wc -c < "$FABRIC_CTX")
+    token_est=$(( chars / 4 ))
+    if (( token_est > TOKEN_WARN )); then
+      echo "[mfab] WARN: context ~${token_est} tokens — model may truncate" >&2
+    fi
+  fi
+}
+
+# ── Router ────────────────────────────────────────────────────────────────────
+route_question() {
+  local question="$1"
+  local rvflags=()
+  [[ -n "$MFAB_ROUTER_VENDOR" ]] && rvflags=(-V "$MFAB_ROUTER_VENDOR")
+
+  local result
+  result=$(echo "$question" | "$FABRIC_BIN" "${rvflags[@]}" -p man-router -m "$MFAB_ROUTER" 2>/dev/null)
+  echo "$result" | grep -o '"tool":"[^"]*"' | cut -d'"' -f4
+}
+
+# ── Smart session titler ──────────────────────────────────────────────────────
+# Generates a short slug like "ssh-port-forwarding-basics" from transcript.
+# Falls back to MFAB_TITLE_FALLBACK pattern on failure or MFAB_TITLER=none.
+generate_title() {
+  local tool="$1"
+  local transcript_file="$2"
+
+  local date_str time_str
+  date_str=$(date +%Y-%m-%d)
+  time_str=$(date +%H%M)
+
+  # Resolve fallback pattern
+  local fallback="${MFAB_TITLE_FALLBACK}"
+  fallback="${fallback//\{date\}/$date_str}"
+  fallback="${fallback//\{time\}/$time_str}"
+  fallback="${fallback//\{tool\}/$tool}"
+
+  if [[ "$MFAB_TITLER" == "none" || -z "$MFAB_TITLER" ]]; then
+    echo "$fallback"
+    return
+  fi
+
+  if [[ ! -f "$transcript_file" ]]; then
+    echo "$fallback"
+    return
+  fi
+
+  local tvflags=()
+  [[ -n "$MFAB_TITLER_VENDOR" ]] && tvflags=(-V "$MFAB_TITLER_VENDOR")
+
+  local slug
+  slug=$(head -c 2000 "$transcript_file" | "$FABRIC_BIN" "${tvflags[@]}" \
+    -m "$MFAB_TITLER" \
+    --raw \
+    -p man-titler 2>/dev/null \
+    | tr '[:upper:]' '[:lower:]' \
+    | tr -cs 'a-z0-9-' '-' \
+    | sed 's/^-//;s/-$//' \
+    | cut -c1-60 \
+    || true)
+
+  if [[ -n "$slug" && "$slug" != *"error"* ]]; then
+    echo "${date_str}-${slug}"
+  else
+    echo "$fallback"
+  fi
+}
+
+# ── Transcript ────────────────────────────────────────────────────────────────
+TRANSCRIPT_FILE=""
+
+init_transcript() {
+  local tool="$1"
+  TRANSCRIPT_FILE="$(mktemp /tmp/mfab-session-XXXXXX.md)"
+  echo "# mfab session: $tool — $(date '+%Y-%m-%d %H:%M')" > "$TRANSCRIPT_FILE"
+  echo "" >> "$TRANSCRIPT_FILE"
+}
+
+append_to_transcript() {
+  local role="$1" content="$2"
+  printf '**%s:** %s\n\n' "$role" "$content" >> "$TRANSCRIPT_FILE"
+}
+
+# ── Exit / note writer ────────────────────────────────────────────────────────
+write_exit_note() {
+  local tool="${1:-unknown}"
+
+  if [[ -z "$OBSV" ]]; then
+    echo "[mfab] skipping note export (OBSV/OBSVAULT not set)" >&2
+    [[ -n "$TRANSCRIPT_FILE" && -f "$TRANSCRIPT_FILE" ]] && rm -f "$TRANSCRIPT_FILE"
+    return
+  fi
+
+  if [[ -z "$TRANSCRIPT_FILE" || ! -f "$TRANSCRIPT_FILE" ]]; then
+    echo "[mfab] no transcript to export" >&2
+    return
+  fi
+
+  # Check transcript has real content (more than just the header)
+  local line_count
+  line_count=$(wc -l < "$TRANSCRIPT_FILE")
+  if (( line_count < 4 )); then
+    echo "[mfab] session too short — skipping note" >&2
+    rm -f "$TRANSCRIPT_FILE"
+    return
+  fi
+
+  echo "[mfab] generating session note..." >&2
+
+  local note_dir="${OBSV}/${MFAB_OBSV_DIR}"
+  mkdir -p "$note_dir"
+
+  # Generate smart filename
+  local title
+  title=$(generate_title "$tool" "$TRANSCRIPT_FILE")
+  local note_file="${note_dir}/${title}.md"
+
+  # Convert transcript → structured note
+  local mvflags=()
+  [[ -n "$MFAB_VENDOR" ]] && mvflags=(-V "$MFAB_VENDOR")
+
+  local raw_note
+  raw_note=$(cat "$TRANSCRIPT_FILE" | "$FABRIC_BIN" "${mvflags[@]}" \
+    -p session-to-note -m "$MFAB_MODEL" 2>/dev/null \
+    || cat "$TRANSCRIPT_FILE")
+
+  # Polish with obsidian frontmatter
+  local polished
+  polished=$(echo "$raw_note" | "$FABRIC_BIN" "${mvflags[@]}" \
+    -p obsidian_note_polish -m "$MFAB_MODEL" 2>/dev/null \
+    || echo "$raw_note")
+
+  # Write final note: polished frontmatter + raw note body
+  {
+    echo "$polished"
+    echo ""
+    echo "---"
+    echo ""
+    echo "$raw_note"
+  } > "$note_file"
+
+  echo "[mfab] note saved: $note_file" >&2
+  rm -f "$TRANSCRIPT_FILE"
+}
+
+# ── Main REPL ─────────────────────────────────────────────────────────────────
+cmd_repl() {
+  check_required_vars
+
+  local current_tool=""
+  local first_turn=1
+  TURN_COUNT=0
+
+  echo "mfab  model: $MFAB_MODEL  |  router: $MFAB_ROUTER"
+  [[ "$MFAB_MODEL_FALLBACK" != "none" ]] && echo "      fallback: $MFAB_MODEL_FALLBACK"
+  echo "      Ctrl-D or 'exit' to quit"
+  echo ""
+
+  trap 'write_exit_note "${current_tool:-unknown}"; echo ""' EXIT
+
+  while true; do
+    # Prompt
+    if [[ -n "$current_tool" ]]; then
+      printf "[%s] > " "$current_tool"
+    else
+      printf "mfab > "
+    fi
+
+    local question
+    if ! IFS= read -r question; then
+      echo ""
+      break
+    fi
+
+    [[ "$question" == "exit" || "$question" == "quit" || "$question" == ":q" ]] && break
+    [[ -z "${question// }" ]] && continue
+
+    # ── Route ──
+    local tool="$current_tool"
+    local skip_router=0
+
+    if [[ "$first_turn" -eq 0 ]] && echo "$question" | grep -qiE "$SKIP_ROUTER_WORDS"; then
+      skip_router=1
+    fi
+
+    if [[ "$skip_router" -eq 0 ]]; then
+      printf "[mfab] routing..." >&2
+      local routed
+      routed=$(route_question "$question")
+      printf "\r                  \r" >&2
+
+      if [[ "$routed" == "SAME" && -n "$current_tool" ]]; then
+        tool="$current_tool"
+      elif [[ "$routed" != "UNKNOWN" && -n "$routed" ]]; then
+        tool="$routed"
+      fi
+    fi
+
+    # ── Context switch ──
+    if [[ "$tool" != "$current_tool" && -n "$tool" ]]; then
+      if [[ -n "$current_tool" ]]; then
+        echo "[mfab] switching: $current_tool → $tool" >&2
+        # Archive previous segment
+        if [[ -f "$TRANSCRIPT_FILE" ]]; then
+          cp "$TRANSCRIPT_FILE" \
+            "${MFAB_ARCHIVE_DIR}/$(date +%Y%m%d-%H%M%S)-${current_tool}.md" 2>/dev/null || true
+        fi
+        SESSION_NAME="${MFAB_SESSION_PREFIX}-$(date +%Y%m%d-%H%M%S)"
+        TURN_COUNT=0
+      else
+        echo "[mfab] loading: $tool" >&2
+      fi
+
+      current_tool="$tool"
+      load_context "$current_tool"
+      check_token_size
+      init_transcript "$current_tool"
+    fi
+
+    first_turn=0
+    TURN_COUNT=$(( TURN_COUNT + 1 ))
+
+    # ── Compaction check ──
+    if [[ "$MFAB_COMPACT_THRESHOLD" -gt 0 ]] && \
+       (( TURN_COUNT > 0 && TURN_COUNT % MFAB_COMPACT_THRESHOLD == 0 )); then
+      echo "[mfab] compacting session at turn ${TURN_COUNT}..." >&2
+      if [[ -f "$TRANSCRIPT_FILE" ]]; then
+        cp "$TRANSCRIPT_FILE" \
+          "${MFAB_ARCHIVE_DIR}/$(date +%Y%m%d-%H%M%S)-compact-${current_tool}.md" 2>/dev/null || true
+      fi
+      SESSION_NAME="${MFAB_SESSION_PREFIX}-$(date +%Y%m%d-%H%M%S)"
+    fi
+
+    # ── Ask fabric ──
+    local mvflags=()
+    [[ -n "$MFAB_VENDOR" ]] && mvflags=(-V "$MFAB_VENDOR")
+
+    local fabric_args=(
+      -p man-expert
+      --session "$SESSION_NAME"
+    )
+    [[ "$MFAB_STREAM" == "1" ]] && fabric_args+=(-s)
+    [[ -n "$current_tool" && -f "$FABRIC_CTX" ]] && fabric_args+=(-C mfab-active)
+
+    append_to_transcript "Q" "$question"
+
+    local answer
+    answer=$(echo "$question" | fabric_call "$MFAB_MODEL" "$MFAB_VENDOR" \
+      "${fabric_args[@]}" 2>/dev/null | tee /dev/tty)
+    echo ""
+
+    append_to_transcript "A" "$answer"
+  done
+}
+
+# ── Entrypoint ────────────────────────────────────────────────────────────────
+case "${1:-}" in
+  --setup|-S)
+    cmd_setup
+    ;;
+  --help|-h)
+    cat <<'EOF'
+mfab — man-page-aware Fabric REPL
+
+USAGE:
+  mfab             Start the interactive REPL
+  mfab --setup     Install patterns, .env template, seed contexts
+  mfab --help      Show this help
+
+CONFIGURATION:
+  ~/.config/mfab/.env   Primary config (created by --setup)
+  ./mfab.env            Repo template (source of truth)
+
+KEY ENV VARS (set in .env or export):
+  MFAB_ROUTER          Fast router model  (e.g. arcee-ai/trinity-mini:free)
+  MFAB_MODEL           Main answer model  (e.g. arcee-ai/trinity-large-preview:free)
+  MFAB_VENDOR          Vendor flag        (default: OpenRouter)
+  MFAB_MODEL_FALLBACK  Fallback on error  (e.g. z-ai/glm-4.5-air:free)
+  MFAB_TITLER          Smart title model  (e.g. stepfun/step-3.5-flash:free)
+  MFAB_OBSV_DIR        Vault subdir       (default: mfab)
+
+FREE MODELS WORTH USING (OpenRouter):
+  Router:  arcee-ai/trinity-mini:free | stepfun/step-3.5-flash:free | qwen/qwen3-4b:free
+  Main:    arcee-ai/trinity-large-preview:free | meta-llama/llama-3.3-70b-instruct:free
+           openai/gpt-oss-120b:free | deepseek/deepseek-r1-0528:free
+           qwen/qwen3-next-80b-a3b-instruct:free | nousresearch/hermes-3-llama-3.1-405b:free
+  z.ai:    z-ai/glm-4.5 | z-ai/glm-4.7 | z-ai/glm-4.5-air:free
+
+EXAMPLES:
+  mfab --setup            # first-time install
+  mfab                    # start REPL (reads ~/.config/mfab/.env)
+
+  mfab > how do I forward a port with ssh?
+  mfab > and make it persistent in background?
+  mfab > how does git rebase -i work?
+EOF
+    ;;
+  "")
+    cmd_repl
+    ;;
+  *)
+    echo "Unknown option: $1  (run 'mfab --help')" >&2
+    exit 1
+    ;;
+esac
