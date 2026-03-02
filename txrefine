@@ -6,6 +6,11 @@
 #   voicenote | txrefine              # Pipe from voicenote
 #   cat transcript.txt | txrefine     # Pipe from file
 #   xclip -o | txrefine               # Pipe from clipboard
+#
+# Pipe-friendly: only the refined text goes to stdout.
+# All status/progress output goes to stderr.
+#   voicenote | txrefine | obsidian-polish    # Chain with other tools
+#   voicenote | txrefine > refined.md         # Redirect to file
 
 set -e
 set -o pipefail
@@ -18,9 +23,36 @@ if command -v fabric-ai &> /dev/null; then
 elif command -v fabric &> /dev/null; then
     FABRIC_CMD="fabric"
 else
-    echo "Error: Neither 'fabric' nor 'fabric-ai' command found."
-    echo "Please install fabric: https://github.com/danielmiessler/fabric"
+    echo "Error: Neither 'fabric' nor 'fabric-ai' command found." >&2
+    echo "Please install fabric: https://github.com/danielmiessler/fabric" >&2
     exit 1
+fi
+
+# ── Optional dynamic model selection ────────────────────────────────────────
+# Set OR_MODEL_SELECT=1 to enable data-driven model selection via or-model-select.
+# The tool reads the most recent or-bench cache and picks the best available model.
+#
+# Examples:
+#   OR_MODEL_SELECT=1 txrefine                       # auto-pick best general model
+#   OR_MODEL_SELECT=1 OR_MODEL_TASK=analysis txrefine  # pick best analysis model
+#   OR_MODEL_SELECT=1 OR_MODEL_NO_TRAINING=1 txrefine  # exclude models that train on data
+#
+# If or-model-select is not on PATH, or the cache is stale/missing,
+# txrefine falls back silently to fabric defaults.
+
+if [[ "${OR_MODEL_SELECT:-0}" == "1" ]] && command -v or-model-select &>/dev/null; then
+    _MS_ARGS=("--model-only")
+    [[ -n "${OR_MODEL_TASK:-}" ]]         && _MS_ARGS+=("--for" "$OR_MODEL_TASK")
+    [[ "${OR_MODEL_NO_TRAINING:-0}" == "1" ]] && _MS_ARGS+=("--no-training")
+    [[ -n "${OR_MODEL_MIN_PARAMS:-}" ]]   && _MS_ARGS+=("--min-params" "$OR_MODEL_MIN_PARAMS")
+
+    _SELECTED_MODEL=$(or-model-select "${_MS_ARGS[@]}" 2>/dev/null)
+
+    if [[ -n "$_SELECTED_MODEL" ]] && [[ "$_SELECTED_MODEL" != *"fabric default"* ]]; then
+        FABRIC_CMD="$FABRIC_CMD -V OpenRouter -m $_SELECTED_MODEL"
+        echo "or-model-select: using $_SELECTED_MODEL" >&2
+    fi
+    unset _MS_ARGS _SELECTED_MODEL
 fi
 
 # Colors
@@ -33,33 +65,32 @@ BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
 
-# Helper function for section headers
+# Helper functions — all output to stderr for pipe compatibility
 print_section() {
-    echo -e "\n${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BOLD}${BLUE}$1${NC}"
-    echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+    echo -e "\n${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" >&2
+    echo -e "${BOLD}${BLUE}$1${NC}" >&2
+    echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n" >&2
 }
 
-# Helper function for status messages
 print_status() {
-    echo -e "${CYAN}▶${NC} $1"
+    echo -e "${CYAN}▶${NC} $1" >&2
 }
 
 print_success() {
-    echo -e "${GREEN}✓${NC} $1"
+    echo -e "${GREEN}✓${NC} $1" >&2
 }
 
 print_error() {
-    echo -e "${RED}✗${NC} $1"
+    echo -e "${RED}✗${NC} $1" >&2
 }
 
 print_warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
+    echo -e "${YELLOW}⚠${NC} $1" >&2
 }
 
-echo -e "${BOLD}${BLUE}╔════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}${BLUE}║  Transcription Refinement Workflow    ║${NC}"
-echo -e "${BOLD}${BLUE}╚════════════════════════════════════════╝${NC}\n"
+echo -e "${BOLD}${BLUE}╔════════════════════════════════════════╗${NC}" >&2
+echo -e "${BOLD}${BLUE}║  Transcription Refinement Workflow    ║${NC}" >&2
+echo -e "${BOLD}${BLUE}╚════════════════════════════════════════╝${NC}\n" >&2
 
 # Step 1: Get input from stdin (MANDATORY)
 if [ -p /dev/stdin ]; then
@@ -67,13 +98,13 @@ if [ -p /dev/stdin ]; then
     RAW_TRANSCRIPTION=$(cat)
 else
     print_error "No input provided. This script requires piped input."
-    echo ""
-    echo -e "${YELLOW}Usage examples:${NC}"
-    echo -e "  ${DIM}voicenote | txrefine${NC}"
-    echo -e "  ${DIM}cat transcript.txt | txrefine${NC}"
-    echo -e "  ${DIM}xclip -o | txrefine${NC}"
-    echo -e "  ${DIM}echo \"your text\" | txrefine${NC}"
-    echo ""
+    echo "" >&2
+    echo -e "${YELLOW}Usage examples:${NC}" >&2
+    echo -e "  ${DIM}voicenote | txrefine${NC}" >&2
+    echo -e "  ${DIM}cat transcript.txt | txrefine${NC}" >&2
+    echo -e "  ${DIM}xclip -o | txrefine${NC}" >&2
+    echo -e "  ${DIM}echo \"your text\" | txrefine${NC}" >&2
+    echo "" >&2
     exit 1
 fi
 
@@ -86,25 +117,25 @@ fi
 print_success "Captured ${#RAW_TRANSCRIPTION} characters"
 
 # Display first few lines of input
-echo -e "\n${DIM}Preview of raw transcription:${NC}"
-echo -e "${DIM}$(echo "$RAW_TRANSCRIPTION" | head -c 200)...${NC}\n"
+echo -e "\n${DIM}Preview of raw transcription:${NC}" >&2
+echo -e "${DIM}$(echo "$RAW_TRANSCRIPTION" | head -c 200)...${NC}\n" >&2
 
 # Step 2: Run transcript analyzer
 print_section "STAGE 1: Terminology Analysis"
 
 print_status "Running transcript-analyzer..."
-echo -e "${DIM}Command: $FABRIC_CMD -p transcript-analyzer${NC}\n"
+echo -e "${DIM}Command: $FABRIC_CMD -p transcript-analyzer${NC}\n" >&2
 
-# Use a temporary file to capture both stdout and track progress
+# Capture output to file, stream progress to stderr
 TEMP_ANALYZER=$(mktemp)
 trap "rm -f $TEMP_ANALYZER" EXIT
 
-echo "$RAW_TRANSCRIPTION" | $FABRIC_CMD -p transcript-analyzer 2>&1 | tee "$TEMP_ANALYZER"
+echo "$RAW_TRANSCRIPTION" | $FABRIC_CMD -p transcript-analyzer 2>&1 | tee "$TEMP_ANALYZER" >&2
 ANALYZER_EXIT=${PIPESTATUS[1]}
 
 WORD_LIST=$(cat "$TEMP_ANALYZER")
 
-echo ""
+echo "" >&2
 if [ $ANALYZER_EXIT -ne 0 ]; then
     print_warning "Analyzer exited with code $ANALYZER_EXIT, continuing without word list"
     WORD_LIST="No specific terms identified."
@@ -125,21 +156,21 @@ $RAW_TRANSCRIPTION
 **Word List:**
 $WORD_LIST"
 
-echo -e "${DIM}Input size: ${#REFINER_INPUT} characters${NC}\n"
+echo -e "${DIM}Input size: ${#REFINER_INPUT} characters${NC}\n" >&2
 
 print_status "Running transcript-refiner..."
-echo -e "${DIM}Command: $FABRIC_CMD -p transcript-refiner${NC}\n"
+echo -e "${DIM}Command: $FABRIC_CMD -p transcript-refiner${NC}\n" >&2
 
-# Use a temporary file to capture output
+# Capture output to file, stream progress to stderr
 TEMP_REFINER=$(mktemp)
 trap "rm -f $TEMP_ANALYZER $TEMP_REFINER" EXIT
 
-echo "$REFINER_INPUT" | $FABRIC_CMD -p transcript-refiner 2>&1 | tee "$TEMP_REFINER"
+echo "$REFINER_INPUT" | $FABRIC_CMD -p transcript-refiner 2>&1 | tee "$TEMP_REFINER" >&2
 REFINER_EXIT=${PIPESTATUS[1]}
 
 REFINED_TRANSCRIPTION=$(cat "$TEMP_REFINER")
 
-echo ""
+echo "" >&2
 if [ $REFINER_EXIT -ne 0 ]; then
     print_error "Refinement failed (exit code: $REFINER_EXIT)"
     exit 1
@@ -152,13 +183,12 @@ fi
 
 print_success "Refinement complete"
 
-# Step 4: Display final result
+# Step 4: Output final result — this is the ONLY thing on stdout
 print_section "FINAL RESULT"
-
 echo "$REFINED_TRANSCRIPTION"
 
 # Step 5: Copy to clipboard
-echo ""
+echo "" >&2
 print_status "Copying to clipboard..."
 
 # Detect clipboard command (macOS vs Linux)
@@ -172,4 +202,4 @@ else
     print_warning "No clipboard utility found (pbcopy/xclip). Skipping clipboard copy."
 fi
 
-echo -e "\n${BOLD}${GREEN}✨ Workflow complete!${NC}\n"
+echo -e "\n${BOLD}${GREEN}Workflow complete!${NC}\n" >&2

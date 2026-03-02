@@ -7,6 +7,8 @@
 #   obsidian-polish note.md --rename-file      # Rename file based on title
 #   obsidian-polish note.md -o output.md       # Save to new file
 #   cat note.md | obsidian-polish              # Pipe mode (stdout)
+#   obsidian-polish -d ./inbox/                # Batch: polish + rename all .md files
+#   obsidian-polish -d ./inbox/ -t             # Batch: title-only mode
 
 set -e
 set -o pipefail
@@ -161,6 +163,286 @@ detect_category() {
     echo "$DEFAULT_CATEGORY"
 }
 
+# ========== BATCH PROCESSING ==========
+batch_process_directory() {
+    local dir="$1"
+
+    # Validate directory
+    if [ ! -d "$dir" ]; then
+        print_error "Directory not found: $dir"
+        exit 1
+    fi
+    dir="${dir%/}"  # strip trailing slash for clean paths
+
+    # Collect .md files (non-recursive, sorted)
+    local files=()
+    while IFS= read -r -d '' f; do
+        files+=("$f")
+    done < <(find "$dir" -maxdepth 1 -name "*.md" -type f -print0 | sort -z)
+
+    local total=${#files[@]}
+    if [ "$total" -eq 0 ]; then
+        print_warning "No .md files found in: $dir"
+        exit 0
+    fi
+
+    echo -e "${BOLD}${BLUE}╔════════════════════════════════════════╗${NC}"
+    echo -e "${BOLD}${BLUE}║   Obsidian Note Polish — Batch Mode    ║${NC}"
+    echo -e "${BOLD}${BLUE}╚════════════════════════════════════════╝${NC}\n"
+
+    print_status "Directory: $dir"
+    print_status "Files: $total .md files"
+    print_status "Mode: $MODE | Rename: yes | Auto-confirm: yes"
+    echo ""
+
+    local succeeded=0
+    local failed=0
+    local skipped=0
+    local renamed_files=()
+
+    for i in "${!files[@]}"; do
+        local file="${files[$i]}"
+        local filename=$(basename "$file")
+        local num=$((i + 1))
+
+        echo -e "${DIM}───────────────────────────────────${NC}"
+        echo -e "${BOLD}[$num/$total]${NC} $filename"
+
+        # Read content
+        local content
+        content=$(cat "$file")
+        if [ -z "$content" ]; then
+            print_warning "  Empty file, skipping"
+            ((skipped++))
+            continue
+        fi
+
+        # Check for existing frontmatter
+        local has_fm=false
+        if echo "$content" | head -1 | grep -q "^---$"; then
+            has_fm=true
+        fi
+
+        # Preserve original created date
+        local orig_created=""
+        if [ "$has_fm" = true ]; then
+            orig_created=$(echo "$content" | awk '
+                /^---$/ { if (++dashes == 2) exit }
+                dashes == 1 && /^created:/ {
+                    sub(/^created: */, "")
+                    print
+                    exit
+                }
+            ')
+        fi
+
+        # Call fabric
+        local temp
+        temp=$(mktemp)
+        local title="" frontmatter="" result=""
+
+        case $MODE in
+            "title-only")
+                if ! echo "$content" | $FABRIC_CMD -p obsidian_note_title > "$temp" 2>&1; then
+                    print_error "  Fabric call failed"
+                    rm -f "$temp"
+                    ((failed++))
+                    continue
+                fi
+                title=$(cat "$temp")
+                ;;
+            "frontmatter-only")
+                if ! echo "$content" | $FABRIC_CMD -p obsidian_frontmatter_gen > "$temp" 2>&1; then
+                    print_error "  Fabric call failed"
+                    rm -f "$temp"
+                    ((failed++))
+                    continue
+                fi
+                frontmatter=$(cat "$temp")
+                ;;
+            "combined")
+                if ! echo "$content" | $FABRIC_CMD -p obsidian_note_polish > "$temp" 2>&1; then
+                    print_error "  Fabric call failed"
+                    rm -f "$temp"
+                    ((failed++))
+                    continue
+                fi
+                result=$(cat "$temp")
+                title=$(echo "$result" | grep "^TITLE:" | sed 's/^TITLE: //')
+                frontmatter=$(echo "$result" | awk '
+                    /^FRONTMATTER:/ { inFM=1; next }
+                    inFM {
+                        if (/^---$/) {
+                            if (seenFirstDashes) {
+                                print $0
+                                exit
+                            }
+                            seenFirstDashes=1
+                        }
+                        if (inFM) print $0
+                    }
+                ')
+                ;;
+        esac
+        rm -f "$temp"
+
+        if [ -z "$title" ] && [ -z "$frontmatter" ]; then
+            print_error "  Generation returned empty result"
+            ((failed++))
+            continue
+        fi
+
+        [ -n "$title" ] && echo -e "  ${CYAN}Title:${NC} $title"
+
+        # Detect category
+        local category="$DEFAULT_CATEGORY"
+        if [ -n "$CATEGORY_OVERRIDE" ]; then
+            category="$CATEGORY_OVERRIDE"
+        else
+            category=$(detect_category "$title" "$frontmatter" "$content")
+        fi
+        echo -e "  ${CYAN}Category:${NC} $category"
+
+        # Inject datetime into frontmatter
+        if [ -n "$frontmatter" ]; then
+            if [ "$has_fm" = true ] && [ -n "$orig_created" ]; then
+                frontmatter=$(echo "$frontmatter" | sed "s|^created: .*|created: $orig_created|")
+                frontmatter=$(echo "$frontmatter" | awk -v date="$SCRIPT_START_DATE" '
+                    /^---$/ && NR > 1 {
+                        print "modified: " date
+                        print
+                        next
+                    }
+                    { print }
+                ')
+            else
+                if echo "$frontmatter" | grep -q "^created:"; then
+                    frontmatter=$(echo "$frontmatter" | sed "s|^created: .*|created: $SCRIPT_START_DATE|")
+                else
+                    frontmatter=$(echo "$frontmatter" | awk -v date="$SCRIPT_START_DATE" '
+                        NR==1 { print; print "created: " date; next }
+                        { print }
+                    ')
+                fi
+            fi
+
+            # Inject category into frontmatter
+            if [ -n "$category" ]; then
+                if echo "$frontmatter" | grep -q "^category:"; then
+                    frontmatter=$(echo "$frontmatter" | sed "s|^category: .*|category: $category|")
+                else
+                    frontmatter=$(echo "$frontmatter" | awk -v cat="$category" '
+                        /^created:/ { print; print "category: " cat; next }
+                        { print }
+                    ')
+                fi
+            fi
+        fi
+
+        # Build enhanced note
+        local enhanced=""
+        if [ -n "$frontmatter" ]; then
+            enhanced="$frontmatter"
+        fi
+
+        # Remove existing frontmatter from content
+        local clean_content="$content"
+        if [ "$has_fm" = true ]; then
+            clean_content=$(echo "$content" | awk '
+                BEGIN { inFrontmatter=0; frontmatterDone=0; }
+                /^---$/ {
+                    if (!frontmatterDone) {
+                        inFrontmatter = !inFrontmatter;
+                        if (!inFrontmatter) {
+                            frontmatterDone = 1;
+                        }
+                        next;
+                    }
+                }
+                !inFrontmatter && frontmatterDone { print }
+            ')
+        fi
+
+        # Add title as H1
+        if [ -n "$title" ]; then
+            # Strip leading blank lines before checking for existing H1
+            while [[ "$clean_content" == $'\n'* ]]; do
+                clean_content="${clean_content#$'\n'}"
+            done
+            local first_line="${clean_content%%$'\n'*}"
+            first_line="${first_line#"${first_line%%[![:space:]]*}"}"
+            first_line="${first_line%"${first_line##*[![:space:]]}"}"
+            if [[ "$first_line" == "#"* ]]; then
+                clean_content="${clean_content#*$'\n'}"
+            fi
+            if [ -n "$enhanced" ]; then
+                enhanced="${enhanced}\n\n# ${title}"
+            else
+                enhanced="# ${title}"
+            fi
+        fi
+
+        if [ -n "$enhanced" ]; then
+            enhanced="${enhanced}\n\n${clean_content}"
+        else
+            enhanced="$clean_content"
+        fi
+
+        # Write file
+        echo -e "$enhanced" > "$file"
+
+        # Rename file (always in batch mode)
+        if [ -n "$title" ]; then
+            local slug
+            slug=$(slugify "$title")
+            if [ -z "$slug" ] || [ "$slug" = "-" ]; then
+                slug="note-$(date +%Y%m%d-%H%M%S)"
+            fi
+            if [ ${#slug} -gt 100 ]; then
+                slug="${slug:0:100}"
+            fi
+
+            local dir_name
+            dir_name=$(dirname "$file")
+            local new_file="${dir_name}/${category}-${slug}.md"
+
+            if [ "$new_file" != "$file" ]; then
+                # Handle collision: append timestamp
+                if [ -f "$new_file" ]; then
+                    new_file="${dir_name}/${category}-${slug}-$(date +%H%M%S).md"
+                fi
+                mv "$file" "$new_file"
+                print_success "  → $(basename "$new_file")"
+                renamed_files+=("$(basename "$new_file")")
+            else
+                print_success "  File updated (name unchanged)"
+            fi
+        else
+            print_success "  File updated"
+        fi
+
+        ((succeeded++))
+    done
+
+    # Summary
+    echo -e "\n${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${BLUE}Batch Summary${NC}"
+    echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+    echo -e "  ${GREEN}✓${NC} Succeeded: $succeeded"
+    [ "$failed" -gt 0 ] && echo -e "  ${RED}✗${NC} Failed:    $failed"
+    [ "$skipped" -gt 0 ] && echo -e "  ${YELLOW}⚠${NC} Skipped:   $skipped"
+    echo -e "  ${DIM}Total:     $total${NC}"
+
+    if [ ${#renamed_files[@]} -gt 0 ]; then
+        echo -e "\n${BOLD}Renamed files:${NC}"
+        for rf in "${renamed_files[@]}"; do
+            echo -e "  ${GREEN}•${NC} $rf"
+        done
+    fi
+
+    echo -e "\n${BOLD}${GREEN}✨ Batch done!${NC}\n"
+}
+
 show_help() {
     echo -e "${BOLD}Obsidian Note Polish Workflow${NC}"
     echo ""
@@ -170,6 +452,11 @@ show_help() {
     echo "    obsidian-polish note.md -r               # Rename file based on title"
     echo "    obsidian-polish note.md -o output.md     # Save to new file"
     echo ""
+    echo "  ${BOLD}Batch/Directory Mode:${NC}"
+    echo "    obsidian-polish -d ./inbox/              # Polish + rename all .md files"
+    echo "    obsidian-polish -d ./inbox/ -t           # Title-only for all files"
+    echo "    obsidian-polish -d ./inbox/ -c dev       # Force category for all"
+    echo ""
     echo "  ${BOLD}Pipe Mode:${NC}"
     echo "    cat note.md | obsidian-polish            # Output to stdout + clipboard"
     echo "    pbpaste | obsidian-polish                # From clipboard"
@@ -178,6 +465,7 @@ show_help() {
     echo "Options:"
     echo "  -o, --output FILE       Save to different file"
     echo "  -r, --rename-file       Rename file based on generated title (slugified)"
+    echo "  -d, --dir DIRECTORY     Batch mode: process all .md files in directory"
     echo "  -c, --category CAT      Override category (dev|meeting|idea|task|doc|research|personal|note)"
     echo "  -t, --title-only        Generate only title"
     echo "  -f, --frontmatter-only  Generate only frontmatter"
@@ -187,6 +475,7 @@ show_help() {
     echo "Examples:"
     echo "  obsidian-polish meeting-notes.md          # Edit file"
     echo "  obsidian-polish draft.md -r -y            # Edit, rename, no prompts"
+    echo "  obsidian-polish -d \$OBSVAULT/inbox/ -y    # Batch polish entire inbox"
     echo "  pbpaste | obsidian-polish                 # From clipboard"
     echo ""
     exit 0
@@ -200,6 +489,7 @@ AUTO_YES=false
 EDIT_IN_PLACE=false
 RENAME_FILE=false
 CATEGORY_OVERRIDE=""
+BATCH_DIR=""
 
 # Check if first argument is a file
 if [ $# -gt 0 ] && [ -f "$1" ]; then
@@ -243,6 +533,14 @@ while [[ $# -gt 0 ]]; do
             MODE="frontmatter-only"
             shift
             ;;
+        -d|--dir)
+            BATCH_DIR="$2"
+            if [ -z "$BATCH_DIR" ]; then
+                print_error "-d/--dir requires a directory argument"
+                exit 1
+            fi
+            shift 2
+            ;;
         -h|--help)
             show_help
             ;;
@@ -263,6 +561,16 @@ if [ "$RENAME_FILE" = true ] && [ "$MODE" = "frontmatter-only" ]; then
     print_warning "--rename-file (-r) requires title generation (ignored with -f)"
 fi
 
+# ========== BATCH MODE DISPATCH ==========
+if [ -n "$BATCH_DIR" ]; then
+    # In batch mode, -y and -r are implied
+    AUTO_YES=true
+    RENAME_FILE=true
+    batch_process_directory "$BATCH_DIR"
+    exit 0
+fi
+
+# ========== SINGLE FILE MODE ==========
 echo -e "${BOLD}${BLUE}╔════════════════════════════════════════╗${NC}"
 echo -e "${BOLD}${BLUE}║   Obsidian Note Polish Workflow        ║${NC}"
 echo -e "${BOLD}${BLUE}╚════════════════════════════════════════╝${NC}\n"
@@ -482,6 +790,10 @@ fi
 
 # Add title as H1 if generated
 if [ -n "$TITLE" ]; then
+    # Strip leading blank lines before checking for existing H1
+    while [[ "$CLEAN_CONTENT" == $'\n'* ]]; do
+        CLEAN_CONTENT="${CLEAN_CONTENT#$'\n'}"
+    done
     # Check if content already starts with H1 using pure bash (avoids subshell SIGPIPE issues)
     FIRST_LINE="${CLEAN_CONTENT%%$'\n'*}"
     FIRST_LINE="${FIRST_LINE#"${FIRST_LINE%%[![:space:]]*}"}"

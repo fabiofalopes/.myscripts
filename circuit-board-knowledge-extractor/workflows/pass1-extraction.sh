@@ -11,8 +11,11 @@ shopt -s nullglob
 #############################################
 
 # Models
-readonly VISION_MODEL="${VISION_MODEL:-Groq-Llama-4-Maverick-17B-128E-Instruct}"
-readonly TEXT_MODEL="${TEXT_MODEL:-Groq-Llama-3.3-70B-Instruct-Preview-Spec}"
+readonly VISION_MODEL="${VISION_MODEL:-Groq|meta-llama/llama-4-maverick-17b-128e-instruct}"
+readonly TEXT_MODEL="${TEXT_MODEL:-Groq|llama-3.3-70b-versatile}"
+
+# Output
+readonly PIPELINE_VERSION="1.0.0"
 
 # Processing options
 readonly SKIP_EXISTING="${SKIP_EXISTING:-false}"
@@ -30,8 +33,8 @@ readonly PATTERN_ANALYZE_JSON="analyze-image-json"
 readonly PATTERN_OCR_EXPERT="expert-ocr-engine"
 readonly PATTERN_OCR_MULTI="multi-scale-ocr"
 
-# Output
-readonly PIPELINE_VERSION="1.0.0"
+# Fabric binary (resolved at startup)
+FABRIC_BIN=""
 readonly LOG_FILE="pipeline-errors.log"
 
 # Default Output Directory
@@ -77,9 +80,14 @@ validate_environment() {
     info "Validating environment..."
     
     # Check fabric
-    if ! command -v fabric >/dev/null 2>&1; then
-        fatal "fabric not found."
+    if command -v fabric-ai >/dev/null 2>&1; then
+        FABRIC_BIN="fabric-ai"
+    elif command -v fabric >/dev/null 2>&1; then
+        FABRIC_BIN="fabric"
+    else
+        fatal "fabric / fabric-ai not found."
     fi
+    info "Using fabric binary: $FABRIC_BIN"
     
     # Check jq
     if ! command -v jq >/dev/null 2>&1; then
@@ -109,8 +117,9 @@ validate_image() {
         return 1
     fi
     
-    # Valid extension?
-    if [[ ! "$image" =~ \.(jpg|jpeg|png)$ ]]; then
+    # Valid extension? (case-insensitive)
+    local lower_image=$(echo "$image" | tr '[:upper:]' '[:lower:]')
+    if [[ ! "$lower_image" =~ \.(jpg|jpeg|png)$ ]]; then
         debug "Not a supported image format: $image"
         return 1
     fi
@@ -200,27 +209,38 @@ extract_json_from_markdown() {
 # Stage 1: Filename Generation
 #############################################
 
+run_fabric_vision() {
+    local image="$1"
+    local pattern="$2"
+    
+    # Split vendor|model format
+    local vendor="${VISION_MODEL%|*}"
+    local model="${VISION_MODEL#*|}"
+    
+    fabric-ai -a "$image" -p "$pattern" -V "$vendor" -m "$model" 2>/dev/null || echo ""
+}
+
 generate_filename() {
     local image="$1"
-    
+
     debug "Stage 1: Generating filename for $image"
-    
+
     # Run fabric pattern
     local candidate
-    candidate=$(fabric -a "$image" -p "$PATTERN_FILENAME" -m "$VISION_MODEL" 2>/dev/null | tr -d '\n\r' | xargs)
-    
+    candidate=$(run_fabric_vision "$image" "$PATTERN_FILENAME" | tr -d '\n\r' | xargs)
+
     # Validate slug
     if validate_slug "$candidate"; then
         debug "Generated filename: $candidate"
         echo "$candidate"
         return 0
     fi
-    
+
     # Fallback: sanitize original filename
     warn "Invalid slug generated, using sanitized original: $candidate"
     local fallback
     fallback=$(basename "$image" | sed 's/\.[^.]*$//' | sanitize_filename)
-    
+
     debug "Fallback filename: $fallback"
     echo "$fallback"
 }
@@ -231,25 +251,25 @@ generate_filename() {
 
 extract_text() {
     local image="${1:-}"
-    
+
     if [[ -z "$image" ]]; then
         error "extract_text: image parameter is required"
         echo "[No description available]"
         return 1
     fi
-    
+
     debug "Stage 2: Extracting text from $image"
-    
+
     # Run fabric pattern
     local output
-    output=$(fabric -a "$image" -p "$PATTERN_TEXT_EXTRACTION" -m "$VISION_MODEL" 2>/dev/null || echo "")
-    
+    output=$(run_fabric_vision "$image" "$PATTERN_TEXT_EXTRACTION")
+
     if [[ -z "$output" ]] || [[ ${#output} -lt 20 ]]; then
         warn "Empty or short text extraction for $image"
         echo "[No description available]"
         return 0
     fi
-    
+
     debug "Text extraction complete (${#output} chars)"
     echo "$output"
 }
@@ -260,29 +280,29 @@ extract_text() {
 
 analyze_image() {
     local image="$1"
-    
+
     debug "Stage 3: Analyzing image structure $image"
-    
+
     local pattern="$PATTERN_ANALYZE_JSON"
-    
+
     # Run fabric pattern
     local raw
-    raw=$(fabric -a "$image" -p "$pattern" -m "$VISION_MODEL" 2>&1)
-    
+    raw=$(run_fabric_vision "$image" "$pattern")
+
     # Check if command failed
-    if [[ $? -ne 0 ]]; then
+    if [[ -z "$raw" ]]; then
         warn "fabric command failed for $image"
         echo "{}"
         return 0
     fi
-    
+
     # Try to validate JSON
     if validate_json "$raw"; then
         debug "Analysis JSON valid"
         echo "$raw"
         return 0
     fi
-    
+
     # Try to extract JSON from markdown
     local extracted
     if extracted=$(extract_json_from_markdown "$raw"); then
@@ -290,7 +310,7 @@ analyze_image() {
         echo "$extracted"
         return 0
     fi
-    
+
     # Fallback to empty object
     warn "Invalid JSON from analyze-image-json for $image"
     debug "Raw output (first 200 chars): ${raw:0:200}"
@@ -303,14 +323,27 @@ analyze_image() {
 
 run_expert_ocr() {
     local image="$1"
-    
+
     debug "Stage 4: Running expert OCR on $image"
-    
+
     local output
-    output=$(fabric -a "$image" -p "$PATTERN_OCR_EXPERT" -m "$VISION_MODEL" 2>/dev/null || echo "")
-    
+    output=$(run_fabric_vision "$image" "$PATTERN_OCR_EXPERT")
+
     # Empty is acceptable
     debug "Expert OCR complete (${#output} chars)"
+    echo "$output"
+}
+
+run_multi_scale_ocr() {
+    local image="$1"
+
+    debug "Stage 5: Running multi-scale OCR on $image"
+
+    local output
+    output=$(run_fabric_vision "$image" "$PATTERN_OCR_MULTI")
+
+    # Empty is acceptable
+    debug "Multi-scale OCR complete (${#output} chars)"
     echo "$output"
 }
 
@@ -324,7 +357,7 @@ run_multi_scale_ocr() {
     debug "Stage 5: Running multi-scale OCR on $image"
     
     local output
-    output=$(fabric -a "$image" -p "$PATTERN_OCR_MULTI" -m "$VISION_MODEL" 2>/dev/null || echo "")
+    output=$($FABRIC_BIN -a "$image" -p "$PATTERN_OCR_MULTI" -m "$VISION_MODEL" 2>/dev/null || echo "")
     
     # Empty is acceptable
     debug "Multi-scale OCR complete (${#output} chars)"

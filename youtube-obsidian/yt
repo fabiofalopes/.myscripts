@@ -57,7 +57,7 @@ def create_parser() -> argparse.ArgumentParser:
     )
     
     # Create subparsers for commands
-    subparsers = parser.add_subparsers(dest="command", help="Commands")
+    subparsers = parser.add_subparsers(dest="command", help="Commands", required=False)
     
     # Status command: yt status VIDEO_ID
     status_parser = subparsers.add_parser(
@@ -84,14 +84,10 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Group by channel"
     )
-    
+
     # Main command arguments (when no subcommand)
-    parser.add_argument(
-        "url",
-        nargs="?",  # Make URL optional
-        help="YouTube video URL"
-    )
-    
+    # Note: URL is handled manually to avoid argparse subparser conflicts
+
     # Mode shortcuts
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
@@ -375,8 +371,33 @@ def handle_vault_command(args, config: Config) -> int:
 
 def main() -> int:
     """Main entry point for yt command."""
+    # Extract URL manually before argparse to avoid subparser conflicts
+    # URL is the first non-flag, non-subcommand argument
+    url = None
+    url_idx = -1
+
+    for i, arg in enumerate(sys.argv[1:], start=1):
+        if arg in ['status', 'vault']:
+            # This is a subcommand, don't extract URL
+            break
+        elif arg.startswith('-'):
+            # Skip flags
+            continue
+        elif not url:
+            # First positional argument that's not a subcommand is the URL
+            url = arg
+            url_idx = i
+            break
+
+    # Remove URL from argv so argparse doesn't see it
+    if url_idx > 0:
+        sys.argv.pop(url_idx)
+
     parser = create_parser()
     args = parser.parse_args()
+
+    # Restore URL to args
+    args.url = url
     
     try:
         # Load configuration
