@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
 """
-yt - YouTube to Obsidian
+ytobs - YouTube to Obsidian
 
 Simple command to extract YouTube videos and generate AI-enhanced Obsidian notes.
 
 Usage:
-    yt URL                 # Smart analysis (recommended)
-    yt --quick URL         # Fast: 5 essential patterns
-    yt --deep URL          # Complete: all patterns
-    yt --preview URL       # Show recommendations only
-    yt status VIDEO        # Show status of processed video
-    yt vault               # Show vault statistics
-    yt --help              # Show all options
+    ytobs URL                   # Smart analysis (recommended)
+    ytobs --quick URL           # Fast: 5 essential patterns
+    ytobs --deep URL            # Complete: all patterns
+    ytobs --preview URL         # Show recommendations only
+    ytobs status VIDEO          # Show status of processed video
+    ytobs vault                 # Show vault statistics
+    ytobs channel URL           # Process entire channel
+    ytobs --help                # Show all options
 
 Examples:
-    yt "https://youtube.com/watch?v=XYZ"
-    yt --quick "https://youtube.com/watch?v=XYZ"
-    yt status jNQXAC9IVRw
-    yt vault
+    ytobs "https://youtube.com/watch?v=XYZ"
+    ytobs --quick "https://youtube.com/watch?v=XYZ"
+    ytobs status jNQXAC9IVRw
+    ytobs vault
+    ytobs channel "https://www.youtube.com/@channelname" --limit 10
 
 Configuration:
     Edit ~/.yt-obsidian/config.yml to customize defaults
@@ -45,12 +47,20 @@ from lib.fabric_orchestrator import orchestrate_fabric_analysis
 from lib.cache_manager import CacheManager, CacheEntry
 from lib.incremental_writer import append_patterns_to_note
 from lib.status_display import display_video_status, display_status_compact
+from lib.channel import (
+    is_channel_url,
+    fetch_channel_videos,
+    get_channel_info,
+    list_videos_table,
+    export_videos_json,
+    ChannelVideo,
+)
 
 
 def create_parser() -> argparse.ArgumentParser:
     """Create argument parser for yt command."""
     parser = argparse.ArgumentParser(
-        prog="yt",
+        prog="ytobs",
         description="Extract YouTube videos to Obsidian notes with AI analysis",
         epilog="Config: ~/.yt-obsidian/config.yml (edit to customize defaults)",
         formatter_class=argparse.RawDescriptionHelpFormatter
@@ -83,6 +93,65 @@ def create_parser() -> argparse.ArgumentParser:
         "--channels",
         action="store_true",
         help="Group by channel"
+    )
+
+    # Channel command: yt channel URL
+    channel_parser = subparsers.add_parser(
+        "channel",
+        help="Process entire YouTube channels"
+    )
+    channel_parser.add_argument(
+        "url",
+        help="Channel URL"
+    )
+    channel_parser.add_argument(
+        "-l", "--limit",
+        type=int,
+        metavar="N",
+        help="Process only N videos"
+    )
+    channel_parser.add_argument(
+        "-s", "--skip",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Skip first N videos"
+    )
+    channel_parser.add_argument(
+        "-n", "--newest",
+        action="store_true",
+        help="Process newest videos first"
+    )
+    channel_parser.add_argument(
+        "-o", "--oldest",
+        action="store_true",
+        help="Process oldest videos first (default)"
+    )
+    channel_parser.add_argument(
+        "--list-only",
+        action="store_true",
+        help="List videos without processing"
+    )
+    channel_parser.add_argument(
+        "--export",
+        type=Path,
+        metavar="FILE",
+        help="Export video list to JSON file"
+    )
+    channel_parser.add_argument(
+        "-i", "--interactive",
+        action="store_true",
+        help="Select videos interactively"
+    )
+    channel_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be processed"
+    )
+    channel_parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Detailed output"
     )
 
     # Main command arguments (when no subcommand)
@@ -294,15 +363,16 @@ def show_recommendations(
 
 def show_concise_help():
     """Show concise help when yt is run without arguments."""
-    help_text = """yt - YouTube to Obsidian
+    help_text = """ytobs - YouTube to Obsidian
 
 USAGE
-  yt URL                   Process video with smart analysis
-  yt --quick URL           Fast mode (5 patterns, ~25s)
-  yt --deep URL            Complete analysis (~70s)
-  yt --preview URL         Show recommendations only
-  yt status VIDEO          Show status of processed video
-  yt vault                 Show vault statistics
+  ytobs URL                   Process video with smart analysis
+  ytobs --quick URL           Fast mode (5 patterns, ~25s)
+  ytobs --deep URL            Complete analysis (~70s)
+  ytobs --preview URL         Show recommendations only
+  ytobs status VIDEO          Show status of processed video
+  ytobs vault                 Show vault statistics
+  ytobs channel URL           Process entire channel
 
 COMMON FLAGS
   --model MODEL            Override AI model
@@ -312,13 +382,14 @@ COMMON FLAGS
   -v, --verbose            Detailed output
 
 EXAMPLES
-  yt "https://youtube.com/watch?v=XYZ"
-  yt --quick "https://youtu.be/ABC"
-  yt status jNQXAC9IVRw
-  yt --append --patterns extract_questions "URL"
+  ytobs "https://youtube.com/watch?v=XYZ"
+  ytobs --quick "https://youtu.be/ABC"
+  ytobs status jNQXAC9IVRw
+  ytobs channel "https://youtube.com/@channelname" --limit 10
+  ytobs --append --patterns extract_questions "URL"
 
 CONFIG: ~/.yt-obsidian/config.yml
-HELP:   yt --help (full options)
+HELP:   ytobs --help (full options)
 """
     print(help_text)
 
@@ -369,6 +440,192 @@ def handle_vault_command(args, config: Config) -> int:
     return 0
 
 
+def handle_channel_command(args, config: Config) -> int:
+    """Handle 'yt channel URL' command."""
+    channel_url = args.url
+
+    # Get channel info
+    print(f"\n📺 Fetching channel info...")
+    try:
+        channel_info = get_channel_info(channel_url)
+        print(f"   Name: {channel_info['name']}")
+        print(f"   ID: {channel_info['id']}")
+    except Exception as e:
+        print(f"   Warning: Could not fetch channel info: {e}")
+        channel_info = {"name": "Unknown", "id": "unknown"}
+
+    print()
+
+    # Determine sort order (oldest first uses reverse)
+    reverse = args.oldest or not args.newest
+
+    # Fetch videos
+    print("⏳ Fetching video list...")
+    try:
+        videos = fetch_channel_videos(
+            channel_url=channel_url,
+            order="date",
+            limit=args.limit,
+            reverse=reverse,
+        )
+    except Exception as e:
+        print(f"❌ Error fetching videos: {e}")
+        return 1
+
+    if not videos:
+        print("❌ No videos found")
+        return 1
+
+    # Apply skip
+    if args.skip > 0:
+        videos = videos[args.skip:]
+        print(f"   Skipped {args.skip} videos")
+
+    print(f"✅ Found {len(videos)} video(s)")
+    print()
+
+    # Export mode
+    if args.export:
+        export_videos_json(videos, args.export)
+        print(f"✅ Exported {len(videos)} videos to {args.export}")
+        return 0
+
+    # List-only mode
+    if args.list_only:
+        print(list_videos_table(videos, show_max=100))
+        return 0
+
+    # Interactive mode
+    if args.interactive:
+        print("Select videos to process:")
+        print("  Enter numbers/ranges (e.g., 1,3,5-10)")
+        print("  'all' for all videos")
+        print("  'q' to quit")
+        print()
+
+        # Show list
+        for i, video in enumerate(videos[:50], 1):
+            print(f"{i:3d}. {video.title}")
+
+        if len(videos) > 50:
+            print(f"\n... and {len(videos) - 50} more videos")
+
+        print()
+        try:
+            selection = input("Selection: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nCancelled")
+            return 0
+
+        if selection.lower() in ('q', 'quit', 'exit'):
+            print("Cancelled")
+            return 0
+
+        if selection.lower() == 'all':
+            selected = videos
+        else:
+            # Parse selection
+            selected = []
+            for part in selection.split(','):
+                part = part.strip()
+                if '-' in part:
+                    start_end = part.split('-')
+                    if len(start_end) == 2:
+                        try:
+                            start = int(start_end[0]) if start_end[0] else 1
+                            end = int(start_end[1]) if start_end[1] else len(videos)
+                            for i in range(start, end + 1):
+                                if 1 <= i <= len(videos):
+                                    selected.append(videos[i - 1])
+                        except ValueError:
+                            continue
+                else:
+                    try:
+                        idx = int(part)
+                        if 1 <= idx <= len(videos):
+                            selected.append(videos[idx - 1])
+                    except ValueError:
+                        continue
+
+            videos = selected
+
+        if not videos:
+            print("No videos selected")
+            return 0
+
+        print(f"\nProcessing {len(videos)} selected video(s)")
+        print()
+
+    # Process videos
+    processed = 0
+    failed = 0
+    total = len(videos)
+
+    for i, video in enumerate(videos, 1):
+        progress = i * 100 // total if total > 0 else 100
+
+        print(f"{'='*60}")
+        print(f"[{i}/{total}] ({progress}%) {video.title}")
+        print(f"   ID: {video.video_id} | Duration: {video.duration or 'N/A'}")
+        print(f"   URL: {video.url}")
+        print()
+
+        if args.dry_run:
+            print("   (dry run - would process this video)")
+            print()
+            continue
+
+        # Process using existing video processing logic
+        # We call the main processing function for each video
+        try:
+            # Build sys.argv for processing this video
+            original_argv = sys.argv.copy()
+            sys.argv = ['yt', video.url]
+
+            # Load config and process
+            from lib.config import load_config, resolve_model, resolve_output_dir
+            video_config = load_config()
+
+            # Use quick/deep mode from args if specified
+            mode = "auto"
+            if hasattr(args, 'quick') and args.quick:
+                mode = "quick"
+            elif hasattr(args, 'deep') and args.deep:
+                mode = "deep"
+
+            # Process the video (reuse existing logic)
+            result = subprocess.run(
+                ['python3', str(Path(__file__).parent / 'yt'), video.url],
+                capture_output=False,
+                cwd=Path(__file__).parent
+            )
+
+            sys.argv = original_argv
+
+            if result.returncode == 0:
+                print("   ✅ Completed")
+            else:
+                print("   ❌ Failed")
+                failed += 1
+
+        except Exception as e:
+            print(f"   ❌ Error: {e}")
+            failed += 1
+
+        processed += 1
+        print()
+
+    # Summary
+    print("="*60)
+    print("📊 Summary:")
+    print(f"   Total:     {total}")
+    print(f"   Completed: {processed - failed}")
+    print(f"   Failed:    {failed}")
+    print()
+
+    return 0 if failed == 0 else 1
+
+
 def main() -> int:
     """Main entry point for yt command."""
     # Extract URL manually before argparse to avoid subparser conflicts
@@ -377,7 +634,7 @@ def main() -> int:
     url_idx = -1
 
     for i, arg in enumerate(sys.argv[1:], start=1):
-        if arg in ['status', 'vault']:
+        if arg in ['status', 'vault', 'channel']:
             # This is a subcommand, don't extract URL
             break
         elif arg.startswith('-'):
@@ -396,8 +653,10 @@ def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
 
-    # Restore URL to args
-    args.url = url
+    # Restore URL to args (only for non-subcommand video URLs)
+    # Subcommands like 'status', 'vault', 'channel' handle their own URL arguments
+    if args.command not in ('status', 'vault', 'channel'):
+        args.url = url
     
     try:
         # Load configuration
@@ -414,6 +673,9 @@ def main() -> int:
         if args.command == "status":
             return handle_status_command(args, config)
         
+        if args.command == "channel":
+            return handle_channel_command(args, config)
+
         if args.command == "vault":
             return handle_vault_command(args, config)
         
