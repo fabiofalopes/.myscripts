@@ -1,5 +1,7 @@
 # Circuit Board Extraction Resume Skill
 
+> **⚠️ SUPERSEDED** (2026-06-05): Circuit board knowledge extractor was extracted to `~/projetos/hub/circuit-extractor/` (Phase 1, E3). All paths below are stale. For current project state, see `hub/circuit-extractor/` and `MASTER_TODO.md`.
+
 ## Project Context
 **Project**: Circuit Board Knowledge Extractor
 **Goal**: Build a multi-pass consensus-based OCR system for circuit board documentation.

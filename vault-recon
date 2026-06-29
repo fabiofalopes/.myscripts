@@ -1,0 +1,210 @@
+#!/bin/bash
+# vault-recon - Vault reconnaissance toolkit
+#
+# Read-only vault analysis tools
+# Optimized for minimal token usage
+# Uses Obsidian CLI for structure queries
+
+set -e
+
+VAULT="obsidian_vault"
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+usage() {
+    echo "Usage: vault-recon <command> [options]"
+    echo ""
+    echo "Commands:"
+    echo "  structure      Analyze vault structure (files, folders, graph)"
+    echo "  orphans        List orphaned notes (no backlinks)"
+    echo "  deadends       List deadend notes (no outgoing links)"
+    echo "  problems       Find problem areas (untitled, empty, clips)"
+    echo "  tags           Analyze tag distribution"
+    echo "  sample         Read sample of files for analysis"
+    echo ""
+    echo "Options:"
+    echo "  -v, --verbose   More detailed output"
+    echo "  -q, --quiet     Minimal output"
+    echo ""
+    echo "Examples:"
+    echo "  vault-recon structure"
+    echo "  vault-recon orphans | head -20"
+    echo "  vault-recon sample agents/ 10"
+    exit 0
+}
+
+# ----------------------------------------------------------------------------
+# Command: structure
+# ----------------------------------------------------------------------------
+vault_structure() {
+    echo -e "${BOLD}=== Vault Structure Analysis ===${NC}"
+    echo ""
+
+    echo "Basic Stats:"
+    TOTAL_FILES=$(obsidian files vault="$VAULT" total 2>/dev/null | grep -v "Loading" | tail -1)
+    TOTAL_FOLDERS=$(obsidian folders vault="$VAULT" total 2>/dev/null | grep -v "Loading" | tail -1)
+    echo "  Files: $TOTAL_FILES"
+    echo "  Folders: $TOTAL_FOLDERS"
+    echo ""
+
+    echo "Top 20 Folders by File Count:"
+    obsidian folders vault="$VAULT" 2>/dev/null | grep -v "Loading" | while read -r folder; do
+        COUNT=$(obsidian files vault="$VAULT" folder="$folder" total 2>/dev/null | grep -v "Loading" | tail -1)
+        printf "  %-40s %5s files\n" "$folder" "$COUNT"
+    done | sort -k2 -nr | head -20
+    echo ""
+
+    echo "Graph Health:"
+    ORPHANS=$(obsidian orphans vault="$VAULT" 2>/dev/null | grep -v "Loading" | wc -l | tr -d ' ')
+    DEADENDS=$(obsidian deadends vault="$VAULT" 2>/dev/null | grep -v "Loading" | wc -l | tr -d ' ')
+    echo "  Orphans (no backlinks): $ORPHANS"
+    echo "  Deadends (no links out): $DEADENDS"
+}
+
+# ----------------------------------------------------------------------------
+# Command: orphans
+# ----------------------------------------------------------------------------
+vault_orphans() {
+    echo -e "${BOLD}=== Orphaned Notes (No Backlinks) ===${NC}"
+    echo ""
+
+    obsidian orphans vault="$VAULT" 2>/dev/null | grep -v "Loading"
+}
+
+# ----------------------------------------------------------------------------
+# Command: deadends
+# ----------------------------------------------------------------------------
+vault_deadends() {
+    echo -e "${BOLD}=== Deadend Notes (No Outgoing Links) ===${NC}"
+    echo ""
+
+    obsidian deadends vault="$VAULT" 2>/dev/null | grep -v "Loading"
+}
+
+# ----------------------------------------------------------------------------
+# Command: problems
+# ----------------------------------------------------------------------------
+vault_problems() {
+    echo -e "${BOLD}=== Problem Areas ===${NC}"
+    echo ""
+
+    # Problem 1: Untitled notes
+    echo -e "${YELLOW}Problem 1: Untitled Notes${NC}"
+    UNTITLED=$(obsidian search vault="$VAULT" query="untitled" 2>/dev/null | grep -v "Loading" | wc -l | tr -d ' ')
+    echo "  Count: ~$UNTITLED"
+    echo "  Sample:"
+    obsidian search vault="$VAULT" query="untitled" 2>/dev/null | grep -v "Loading" | head -5 | sed 's/^/    /'
+    echo ""
+
+    # Problem 2: Archive folder size
+    echo -e "${YELLOW}Problem 2: Archive Folder Size${NC}"
+    if [ -d "/Users/fabiofalopes/Documents/obsidian_vault/00_Arquivo" ]; then
+        SIZE=$(du -sh "/Users/fabiofalopes/Documents/obsidian_vault/00_Arquivo" 2>/dev/null | cut -f1)
+        FILE_COUNT=$(find "/Users/fabiofalopes/Documents/obsidian_vault/00_Arquivo" -type f | wc -l | tr -d ' ')
+        echo "  Size: $SIZE"
+        echo "  Files: $FILE_COUNT"
+    else
+        echo "  Not found"
+    fi
+    echo ""
+
+    # Problem 3: Root folder clutter
+    echo -e "${YELLOW}Problem 3: Root Folder Clutter${NC}"
+    ROOT_FILES=$(ls -1 "/Users/fabiofalopes/Documents/obsidian_vault/"*.md 2>/dev/null | wc -l | tr -d ' ')
+    echo "  Markdown files in root: $ROOT_FILES"
+}
+
+# ----------------------------------------------------------------------------
+# Command: tags
+# ----------------------------------------------------------------------------
+vault_tags() {
+    echo -e "${BOLD}=== Tag Distribution ===${NC}"
+    echo ""
+
+    echo "Top 20 Tags:"
+    # Try to get tags as JSON, fall back to text format
+    TAGS_JSON=$(obsidian tags vault="$VAULT" format=json counts 2>/dev/null | grep -v "Loading")
+    if [ -n "$TAGS_JSON" ]; then
+        echo "$TAGS_JSON" | jq -r '.[] | "\(.tag)\t\(.count)"' | sort -t$'\t' -k2 -nr | head -20 | \
+            awk '{printf "  %-30s %5s occurrences\n", $1, $2}'
+    else
+        echo "  (Tag query not working - need manual analysis)"
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# Command: sample
+# ----------------------------------------------------------------------------
+vault_sample() {
+    FOLDER="$1"
+    COUNT="${2:-10}"
+
+    echo -e "${BOLD}=== Sample Analysis: $FOLDER${NC}"
+    echo "Reading $COUNT files for analysis..."
+    echo ""
+
+    # Get files in folder
+    FILES=$(obsidian files vault="$VAULT" folder="$FOLDER" ext=".md" 2>/dev/null | grep -v "Loading")
+
+    # Sample N files
+    echo "$FILES" | shuf | head -"$COUNT" | while read -r file; do
+        # Read file
+        CONTENT=$(obsidian read vault="$VAULT" path="$file" 2>/dev/null | grep -v "Loading")
+
+        # Extract info
+        TITLE=$(echo "$CONTENT" | grep -E "^#{1,3} " | head -1)
+        WORDS=$(echo "$CONTENT" | wc -w | tr -d ' ')
+        TAGS=$(echo "$CONTENT" | grep -oE '#[a-zA-Z][a-zA-Z0-9_-]*' | sort -u | tr '\n' ', ' | sed 's/^#//; s/, $/; s/, $//')
+
+        echo "  📄 $file"
+        echo "     Title: $TITLE"
+        echo "     Size: $WORDS words"
+        echo "     Tags: [$TAGS]"
+        echo ""
+    done
+}
+
+# ----------------------------------------------------------------------------
+# Parse arguments
+# ----------------------------------------------------------------------------
+if [ $# -lt 1 ]; then
+    usage
+fi
+
+COMMAND="$1"
+shift
+
+case "$COMMAND" in
+    structure)
+        vault_structure
+        ;;
+    orphans)
+        vault_orphans
+        ;;
+    deadends)
+        vault_deadends
+        ;;
+    problems)
+        vault_problems
+        ;;
+    tags)
+        vault_tags
+        ;;
+    sample)
+        if [ $# -lt 1 ]; then
+            echo "Error: sample command requires folder path"
+            echo "Usage: vault-recon sample <folder> [count]"
+            exit 1
+        fi
+        vault_sample "$1" "$2"
+        ;;
+    *)
+        echo "Error: Unknown command '$COMMAND'"
+        usage
+        ;;
+esac

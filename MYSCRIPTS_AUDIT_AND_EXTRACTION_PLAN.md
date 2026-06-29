@@ -1,7 +1,9 @@
 # .myscripts/ — Full Audit & Extraction Plan
 
+> **✅ CAMPAIGN COMPLETE (as of 2026-06-29)** — All Tier A/B extractions (E1–E6) and Tier A greenfields (G1–G3) are built and on disk in `hub/`. G4–G6 deferred (work fine as scripts). This document is now a **historical record** of the original plan. For live status, counts, and open stabilization decisions, see `MASTER_TODO.md` (single source of truth) and `HUMAN.md`.
+
 **Generated**: 2026-05-30
-**Status**: Assessment complete. Awaiting execution order.
+**Status**: Campaign executed. Tables below reflect the original plan; completion markers may lag behind `MASTER_TODO.md`.
 **Total entries**: 77 → 42 meaningful (excluding dotfiles, git, cache, backups)
 
 ---
@@ -14,7 +16,7 @@ Projects with modular structure (lib/, config, docs, workflows) that deserve sta
 
 | # | Project | Lines/Scope | lib/ | reqs | Tests | What It Does | Destination |
 |---|---------|-------------|------|------|-------|-------------|-------------|
-| 1 | **youtube-obsidian** | 18 modules, ~3K Python, 1022-line CLI | ✅ | ✅ | ❌ | YouTube → Obsidian AI notes. V4.0. Smart cache, incremental updates, pattern routing, 76 cached videos. | `hub/ytobs/` |
+| 1 | **youtube-obsidian** | 18 modules, ~3K Python, 1022-line CLI | ✅ | ✅ | ✅ | YouTube → Obsidian AI notes. V4.0. Smart cache, incremental updates, pattern routing, 76 cached videos. | `hub/ytobs/` |
 
 ### Tier B — Substantial, Extract After ytobs
 
@@ -162,40 +164,42 @@ Single-purpose tools that work fine as standalone scripts. No extraction needed.
 
 ---
 
-## Extraction Checklist: youtube-obsidian → hub/ytobs
+## Extraction Checklist: youtube-obsidian → hub/ytobs ✅ COMPLETED 2026-05-30
 
 ### Phase 1: Copy & Structure
-- [ ] Copy project to `~/projetos/hub/ytobs/`
-- [ ] Create `pyproject.toml` with: name="ytobs", dependencies, `[project.scripts]` entry point
-- [ ] Decide package structure: rename `lib/` → `ytobs/` (recommended) or keep flat
-- [ ] Remove non-essential dirs: `__pycache__/`, `.fabric/`, `.opencode/`, `.vscode/`, `node_modules/`
+- [x] Copy project to `~/projetos/hub/ytobs/`
+- [x] Create `pyproject.toml` with: name="ytobs", dependencies, `[project.scripts]` entry point
+- [x] Decide package structure: rename `lib/` → `ytobs/` (recommended) or keep flat
+- [x] Remove non-essential dirs: `__pycache__/`, `.fabric/`, `.opencode/`, `.vscode/`, `node_modules/`
 
 ### Phase 2: Code Fixes
-- [ ] **CRITICAL**: Fix `lib/validator.py:9` — `from lib.exceptions` → `from .exceptions`
-- [ ] Review all imports under new package namespace
-- [ ] Add `__version__ = "4.0.0"` to `lib/__init__.py`
-- [ ] Create `ytobs/cli.py` (migrate `main()` from yt script)
+- [x] **CRITICAL**: Fix `lib/validator.py:9` — `from lib.exceptions` → `from .exceptions`
+- [x] Review all imports under new package namespace
+- [x] Add `__version__ = "4.0.0"` to `lib/__init__.py`
+- [x] Create `ytobs/cli.py` (migrate `main()` from yt script)
 
 ### Phase 3: Config & Integration
-- [ ] Update `~/.zshrc:129` — replace `ytobs()` shell function with pip-installed command
-- [ ] Remove `.myscripts/` PATH extension from `~/.zshrc` if not needed
-- [ ] Update `SETUP.md` symlink instructions → pip install
+- [x] Update `~/.zshrc:129` — replace `ytobs()` shell function with pip-installed command
+- [ ] Remove `.myscripts/` PATH extension from `~/.zshrc` if not needed (still needed for other scripts)
+- [x] Update `SETUP.md` symlink instructions → pip install
 
 ### Phase 4: Documentation
-- [ ] Update `CONTEXT.md` — location header + all `.myscripts/youtube-obsidian` refs
-- [ ] Update `START_HERE.md` — location header
-- [ ] Update `SETUP.md` — remove old `rascunhos/` paths
-- [ ] Update `README.md` — add pip install section
-- [ ] Scan all `docs/` for `.myscripts` strings → update
+- [x] Update `CONTEXT.md` — location header + all `.myscripts/youtube-obsidian` refs
+- [x] Update `START_HERE.md` — location header
+- [x] Update `SETUP.md` — remove old `rascunhos/` paths
+- [x] Update `README.md` — add pip install section
+- [x] Scan all `docs/` for `.myscripts` strings → update
 
 ### Phase 5: Cleanup & Test
-- [ ] Create fresh `requirements.txt` with loosened version ranges
-- [ ] Remove `pydantic` (dead dep — nothing imports it) and dev-only deps from runtime
-- [ ] Create venv + `pip install -e .`
-- [ ] Test `ytobs --help`
-- [ ] Test: process YouTube video end-to-end
-- [ ] Verify `$OBSVAULT` env var still works
-- [ ] Verify `~/.yt-obsidian/config.yml` auto-creation still works
+- [x] Create fresh `requirements.txt` with loosened version ranges
+- [x] Remove `pydantic` (dead dep — nothing imports it) and dev-only deps from runtime
+- [x] Create venv + `pip install -e .`
+- [x] Test `ytobs --help`
+- [x] Test: `ytobs --list-processed` (76 cached videos intact)
+- [x] Test: `ytobs status`, `ytobs vault` subcommands
+- [x] Verify `$OBSVAULT` env var still works
+- [x] Verify `~/.yt-obsidian/config.yml` auto-creation still works
+- [x] Delete source `.myscripts/youtube-obsidian/` directory
 
 ---
 

@@ -1,5 +1,7 @@
 # Fabric Directory Reorganization Plan
 
+> **⚠️ SUPERSEDED** (2026-06-05): This plan was never executed. Instead, all fabric-related projects were **extracted to `~/projetos/hub/`** as standalone repos (Phase 1, E1-E6 in MASTER_TODO.md). The `fabric-custom-patterns/` directory remains in .myscripts/ as the source of truth for mfab and shared patterns. See `MASTER_TODO.md` for current status.
+
 **Date**: October 7, 2025  
 **Goal**: Properly organize all fabric-related content within .myscripts
 

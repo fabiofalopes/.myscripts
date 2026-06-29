@@ -1,5 +1,7 @@
 #!/bin/bash
-# slugfile — rename files to clean slugified names
+# slugfile — rename files to clean slugified names with Obsidian-friendly features
+#
+# Enhanced version with date prefixes, tag extraction, and polish mode integration
 #
 # Uses the system `slugify` command (npm: @sindresorhus/slugify-cli)
 # to rename files. Preserves extensions. Handles directories of files.
@@ -9,6 +11,10 @@
 #   slugfile *.md                           # rename multiple files
 #   slugfile -r ./messy-folder/             # recursive
 #   slugfile -n *.md                        # dry-run (preview only)
+#   slugfile -d note.md                     # add date prefix: 2026-04-22-note.md
+#   slugfile -t note.md                     # extract tags: my-note-tag1-tag2.md
+#   slugfile -d -t note.md                  # combine: 2026-04-22-my-note-tag1-tag2.md
+#   slugfile -p note.md                     # polish mode: run obsidian-polish first
 #   echo "some text" | slugfile             # stdin: just print the slug (no rename)
 #
 # Flags:
@@ -17,6 +23,12 @@
 #   -r, --recursive    Recurse into directories
 #   -f, --force        Overwrite existing files (default: skip)
 #   -e, --ext EXT      Also change extension (e.g. -e txt)
+#   -d, --date [DATE]  Add date prefix (default: today, or specify YYYY-MM-DD)
+#   -t, --tags         Extract tags from frontmatter/content and append to name
+#   -p, --polish       Run obsidian-polish first, then apply -d and -t
+#   -k, --skip-tags    Skip certain tags (comma-separated: e.g., -k "untitled,draft")
+#   --max-tags N       Maximum tags to include in filename (default: 3)
+#   --collision MODE   Collision handling: increment|ask|skip|overwrite (default: skip)
 
 set -e
 set -o pipefail
@@ -49,28 +61,122 @@ fi
 # Usage
 # ---------------------------------------------------------------------------
 usage() {
-    echo -e "${BOLD}slugfile${NC} — rename files to clean slugified names"
+    echo -e "${BOLD}slugfile${NC} — rename files to clean slugified names with Obsidian features"
     echo ""
     echo -e "${BOLD}USAGE${NC}"
     echo "  slugfile [FLAGS] FILE [FILE...]"
     echo "  slugfile [FLAGS] -r DIRECTORY"
     echo "  echo \"text\" | slugfile              # just print the slug"
     echo ""
-    echo -e "${BOLD}FLAGS${NC}"
+    echo -e "${BOLD}BASIC FLAGS${NC}"
     echo "  -h, --help         Show this help"
     echo "  -n, --dry-run      Preview renames, don't execute"
     echo "  -r, --recursive    Recurse into directories"
     echo "  -f, --force        Overwrite if target exists (default: skip)"
     echo "  -e, --ext EXT      Change extension (e.g. -e txt)"
     echo ""
+    echo -e "${BOLD}OBSIDIAN FLAGS${NC}"
+    echo "  -d, --date [DATE]  Add date prefix (default: today, or specify YYYY-MM-DD)"
+    echo "  -t, --tags         Extract tags from frontmatter/content"
+    echo "  -p, --polish       Run obsidian-polish first, then apply -d and -t"
+    echo "  -k, --skip-tags    Skip certain tags (comma-separated)"
+    echo "  --max-tags N       Max tags in filename (default: 3)"
+    echo ""
+    echo -e "${BOLD}ADVANCED FLAGS${NC}"
+    echo "  --collision MODE   Collision handling: increment|ask|skip|overwrite"
+    echo ""
     echo -e "${BOLD}EXAMPLES${NC}"
-    echo "  slugfile \"My Document (Final).md\"    # -> my-document-final.md"
-    echo "  slugfile -n *.md                      # preview all renames"
-    echo "  slugfile -r ./notes/                  # rename everything recursively"
-    echo "  slugfile -r -e md ./notes/            # rename + force .md extension"
+    echo "  slugfile \"My Document (Final).md\"             # -> my-document-final.md"
+    echo "  slugfile -d note.md                           # -> 2026-04-22-note.md"
+    echo "  slugfile -t note.md                           # -> note-tag1-tag2.md"
+    echo "  slugfile -d -t note.md                        # -> 2026-04-22-note-tag1-tag2.md"
+    echo "  slugfile -p note.md                           # polish -> slugify with date+tags"
+    echo "  slugfile -n *.md                              # preview all renames"
+    echo "  slugfile -r ./notes/                          # rename everything recursively"
+    echo "  slugfile -p -r ./inbox/                       # polish + slugify folder"
     echo ""
     echo -e "${DIM}Preserves file extensions. Uses @sindresorhus/slugify-cli.${NC}"
+    echo -e "${DIM}Tag extraction works with YAML frontmatter and inline #tags.${NC}"
     exit 0
+}
+
+# ---------------------------------------------------------------------------
+# Extract tags from YAML frontmatter
+# ---------------------------------------------------------------------------
+extract_tags_from_frontmatter() {
+    local frontmatter="$1"
+    local tags=""
+
+    # Try array format: tags: [tag1, tag2]
+    if echo "$frontmatter" | grep -qE '^tags: *\['; then
+        tags=$(echo "$frontmatter" | grep -E '^tags:' | \
+            sed 's/^tags: *\[//; s/\].*$//' | tr ',' '\n' | \
+            sed 's/^[ "'"'"'#]*//; s/[ "'"'"']*$//' | grep -v '^$' | tr '\n' ' ')
+    # Try inline format: tags: tag1, tag2
+    elif echo "$frontmatter" | grep -qE '^tags: *[a-zA-Z#]'; then
+        tags=$(echo "$frontmatter" | grep -E '^tags:' | sed 's/^tags: *//; s/^#//')
+    # Try list format:
+    #   tags:
+    #     - tag1
+    #     - tag2
+    elif echo "$frontmatter" | grep -qE '^tags: *$'; then
+        tags=$(echo "$frontmatter" | awk '
+            /^tags:/ { capture=1; next }
+            capture && /^  - / { gsub(/^  - /, ""); gsub(/^#/, ""); print }
+            capture && /^[^ ]/ { exit }
+        ' | grep -v '^$' | tr '\n' ' ')
+    fi
+
+    echo "$tags" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+# ---------------------------------------------------------------------------
+# Extract inline tags from content (#tag format)
+# ---------------------------------------------------------------------------
+extract_inline_tags() {
+    local content="$1"
+    # Match #tag but not #heading or ##heading
+    # Look for tags followed by space, end of line, or punctuation
+    echo "$content" | grep -oE '#[a-zA-Z][a-zA-Z0-9_-]*' | \
+        sed 's/^#//g' | tr '[:upper:]' '[:lower:]' | sort -u | tr '\n' ' ' | \
+        sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+# ---------------------------------------------------------------------------
+# Main tag extraction function
+# ---------------------------------------------------------------------------
+extract_tags() {
+    local filepath="$1"
+
+    # Skip if file doesn't exist or isn't readable
+    if [ ! -f "$filepath" ] || [ ! -r "$filepath" ]; then
+        echo ""
+        return
+    fi
+
+    local content=""
+    local frontmatter=""
+    local tags=""
+
+    # Read file content
+    content=$(cat "$filepath")
+
+    # Extract YAML frontmatter (between --- lines)
+    if echo "$content" | grep -q '^---'; then
+        frontmatter=$(echo "$content" | awk '/^---/{f++;if(f==2)exit;next}f==1')
+    fi
+
+    # Extract tags from frontmatter
+    if [ -n "$frontmatter" ]; then
+        tags=$(extract_tags_from_frontmatter "$frontmatter")
+    fi
+
+    # If no tags in frontmatter, try inline tags
+    if [ -z "$tags" ]; then
+        tags=$(extract_inline_tags "$content")
+    fi
+
+    echo "$tags"
 }
 
 # ---------------------------------------------------------------------------
@@ -106,12 +212,186 @@ slugify_name() {
 }
 
 # ---------------------------------------------------------------------------
+# Add date prefix to filename
+# ---------------------------------------------------------------------------
+add_date_prefix() {
+    local basename="$1"
+    local ext=""
+    local name=""
+
+    # Extract extension
+    case "$basename" in
+        *.tar.gz)  ext=".tar.gz"; name="${basename%.tar.gz}" ;;
+        *.tar.bz2) ext=".tar.bz2"; name="${basename%.tar.bz2}" ;;
+        *.tar.xz)  ext=".tar.xz"; name="${basename%.tar.xz}" ;;
+        *.*)       ext=".${basename##*.}"; name="${basename%.*}" ;;
+        *)         ext=""; name="$basename" ;;
+    esac
+
+    # Add date prefix
+    local date_str="${DATE_PREFIX:-$(date '+%Y-%m-%d')}"
+
+    echo "${date_str}-${name}${ext}"
+}
+
+# ---------------------------------------------------------------------------
+# Add tags suffix to filename
+# ---------------------------------------------------------------------------
+add_tags_suffix() {
+    local basename="$1"
+    local tags="$2"
+    local ext=""
+    local name=""
+
+    # Extract extension
+    case "$basename" in
+        *.tar.gz)  ext=".tar.gz"; name="${basename%.tar.gz}" ;;
+        *.tar.bz2) ext=".tar.bz2"; name="${basename%.tar.bz2}" ;;
+        *.tar.xz)  ext=".tar.xz"; name="${basename%.tar.xz}" ;;
+        *.*)       ext=".${basename##*.}"; name="${basename%.*}" ;;
+        *)         ext=""; name="$basename" ;;
+    esac
+
+    # Skip if no tags
+    if [ -z "$tags" ]; then
+        echo "${basename}"
+        return
+    fi
+
+    # Process tags: filter skip list, limit count
+    local tag_array=()
+    local count=0
+
+    for tag in $tags; do
+        # Check skip list
+        local skip=false
+        for skip_tag in ${SKIP_TAGS//,/ }; do
+            if [ "$tag" = "$skip_tag" ]; then
+                skip=true
+                break
+            fi
+        done
+
+        if [ "$skip" = false ]; then
+            tag_array+=("$tag")
+            ((count++))
+            if [ $count -ge $MAX_TAGS ]; then
+                break
+            fi
+        fi
+    done
+
+    # Add tags to filename
+    if [ ${#tag_array[@]} -gt 0 ]; then
+        local tag_suffix=$(IFS=-; echo "${tag_array[*]}")
+        echo "${name}-${tag_suffix}${ext}"
+    else
+        echo "${basename}"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Handle collision
+# ---------------------------------------------------------------------------
+handle_collision() {
+    local current_path="$1"
+    local target_path="$2"
+    local mode="$COLLISION_MODE"
+
+    # If target doesn't exist, no collision
+    if [ ! -e "$target_path" ]; then
+        echo "$target_path"
+        return 0
+    fi
+
+    case "$mode" in
+        increment)
+            # Add numeric suffix
+            local dir=$(dirname "$target_path")
+            local basename=$(basename "$target_path")
+            local ext=""
+            local name=""
+
+            # Extract extension
+            case "$basename" in
+                *.tar.gz)  ext=".tar.gz"; name="${basename%.tar.gz}" ;;
+                *.tar.bz2) ext=".tar.bz2"; name="${basename%.tar.bz2}" ;;
+                *.tar.xz)  ext=".tar.xz"; name="${basename%.tar.xz}" ;;
+                *.*)       ext=".${basename##*.}"; name="${basename%.*}" ;;
+                *)         ext=""; name="$basename" ;;
+            esac
+
+            local counter=2
+            local new_path="${dir}/${name}-${counter}${ext}"
+
+            while [ -e "$new_path" ]; do
+                ((counter++))
+                new_path="${dir}/${name}-${counter}${ext}"
+            done
+
+            echo "$new_path"
+            ;;
+        ask)
+            # Prompt user (skip in non-interactive mode)
+            if [ -t 0 ]; then
+                echo -e "${YELLOW}Collision:${NC} $target_path exists"
+                echo -n "Overwrite? [y/N/s=skip]: "
+                read -r response
+                case "$response" in
+                    [yY]*) echo "$target_path" ;;
+                    *)     echo "" ;;  # Return empty to skip
+                esac
+            else
+                # Non-interactive: skip
+                echo ""
+            fi
+            ;;
+        overwrite)
+            # Use target as-is
+            echo "$target_path"
+            ;;
+        skip|*)
+            # Return empty to signal skip
+            echo ""
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Run obsidian-polish on a file
+# ---------------------------------------------------------------------------
+run_obsidian_polish() {
+    local filepath="$1"
+
+    # Check if obsidian-polish exists
+    if ! command -v obsidian-polish &> /dev/null; then
+        echo -e "${YELLOW}warning:${NC} obsidian-polish not found, skipping polish step" >&2
+        return 1
+    fi
+
+    # Run obsidian-polish (edit in place)
+    obsidian-polish "$filepath" 2>/dev/null || {
+        echo -e "${YELLOW}warning:${NC} obsidian-polish failed on $filepath" >&2
+        return 1
+    }
+
+    return 0
+}
+
+# ---------------------------------------------------------------------------
 # Parse arguments
 # ---------------------------------------------------------------------------
 DRY_RUN=false
 RECURSIVE=false
 FORCE=false
 NEW_EXT=""
+ADD_DATE=false
+DATE_PREFIX=""
+EXTRACT_TAGS=false
+POLISH_MODE=false
+SKIP_TAGS=""
+MAX_TAGS=3
+COLLISION_MODE="skip"
 FILES=()
 
 while [ $# -gt 0 ]; do
@@ -121,11 +401,45 @@ while [ $# -gt 0 ]; do
         -r|--recursive) RECURSIVE=true; shift ;;
         -f|--force)    FORCE=true; shift ;;
         -e|--ext)      NEW_EXT="$2"; shift 2 ;;
+        -d|--date)
+            ADD_DATE=true
+            if [[ "$2" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+                DATE_PREFIX="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        -t|--tags)     EXTRACT_TAGS=true; shift ;;
+        -p|--polish)   POLISH_MODE=true; ADD_DATE=true; EXTRACT_TAGS=true; shift ;;
+        -k|--skip-tags) SKIP_TAGS="$2"; shift 2 ;;
+        --max-tags)    MAX_TAGS="$2"; shift 2 ;;
+        --collision=*)
+            COLLISION_MODE="${1#--collision=}"
+            if [[ ! "$COLLISION_MODE" =~ ^(increment|ask|skip|overwrite)$ ]]; then
+                echo -e "${RED}error:${NC} invalid collision mode: $COLLISION_MODE" >&2
+                exit 1
+            fi
+            shift
+            ;;
+        --collision)
+            COLLISION_MODE="$2"
+            if [[ ! "$COLLISION_MODE" =~ ^(increment|ask|skip|overwrite)$ ]]; then
+                echo -e "${RED}error:${NC} invalid collision mode: $COLLISION_MODE" >&2
+                exit 1
+            fi
+            shift 2
+            ;;
         --)            shift; FILES+=("$@"); break ;;
         -*)            echo -e "${RED}error:${NC} unknown flag '$1'" >&2; exit 1 ;;
         *)             FILES+=("$1"); shift ;;
     esac
 done
+
+# If polish mode and force not set, use skip for collisions
+if [ "$POLISH_MODE" = true ] && [ "$COLLISION_MODE" = "skip" ]; then
+    COLLISION_MODE="increment"
+fi
 
 # ---------------------------------------------------------------------------
 # Stdin mode: just print the slug (no file rename)
@@ -180,11 +494,39 @@ fi
 renamed=0
 skipped=0
 unchanged=0
+polished=0
 
 for filepath in "${ALL_FILES[@]}"; do
     dir=$(dirname "$filepath")
     basename=$(basename "$filepath")
+
+    # Step 1: Polish if requested
+    if [ "$POLISH_MODE" = true ]; then
+        if run_obsidian_polish "$filepath"; then
+            ((polished++))
+            # Re-read file after polishing
+            basename=$(basename "$filepath")
+        fi
+    fi
+
+    # Step 2: Extract tags if requested
+    tags=""
+    if [ "$EXTRACT_TAGS" = true ]; then
+        tags=$(extract_tags "$filepath")
+    fi
+
+    # Step 3: Slugify the name
     new_basename=$(slugify_name "$basename")
+
+    # Step 4: Add date prefix if requested
+    if [ "$ADD_DATE" = true ]; then
+        new_basename=$(add_date_prefix "$new_basename")
+    fi
+
+    # Step 5: Add tags suffix if requested
+    if [ "$EXTRACT_TAGS" = true ] && [ -n "$tags" ]; then
+        new_basename=$(add_tags_suffix "$new_basename" "$tags")
+    fi
 
     # Skip if already slugified
     if [ "$basename" = "$new_basename" ]; then
@@ -194,11 +536,16 @@ for filepath in "${ALL_FILES[@]}"; do
 
     new_path="${dir}/${new_basename}"
 
-    # Handle collision
+    # Step 6: Handle collision
     if [ -e "$new_path" ] && ! $FORCE; then
-        echo -e "${YELLOW}  skip${NC} ${basename} -> ${new_basename} ${DIM}(target exists)${NC}"
-        ((skipped++))
-        continue
+        local final_path=$(handle_collision "$filepath" "$new_path")
+        if [ -z "$final_path" ]; then
+            echo -e "${YELLOW}  skip${NC} ${basename} -> ${new_basename} ${DIM}(target exists)${NC}"
+            ((skipped++))
+            continue
+        else
+            new_path="$final_path"
+        fi
     fi
 
     if $DRY_RUN; then
@@ -218,5 +565,9 @@ if [ -t 1 ]; then
     action="renamed"
     $DRY_RUN && action="would rename"
     echo ""
-    echo -e "${DIM}${action}: ${renamed}  skipped: ${skipped}  unchanged: ${unchanged}  total: ${total}${NC}"
+    echo -e "${DIM}${action}: ${renamed}  skipped: ${skipped}  unchanged: ${unchanged}${NC}"
+    if [ "$polished" -gt 0 ]; then
+        echo -e "${DIM}polished: ${polished}${NC}"
+    fi
+    echo -e "${DIM}total: ${total}${NC}"
 fi

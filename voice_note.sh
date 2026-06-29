@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# ⚠️ DEPRECATED (2026-06) — Superseded by hub/voice_note/
+# Use `vn` alias instead. This script remains for reference only.
+
 # ---------------------------------------------
 # voice_note.sh - Full lifecycle voice note script
 # Supports optional initial text input for VoiceNode

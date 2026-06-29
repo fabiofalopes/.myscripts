@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# fab — Fabric wrapper with auto-fallback to default model when local providers unavailable
+#
+# Usage: Same as fabric-ai
+#   fab -p summarize "your text"
+#   fab -V "LM Studio" -m model "text"   # Falls back to default if LM Studio not running
+#   fab -V "Ollama" -m model "text"      # Falls back to default if Ollama not running
+
+set -euo pipefail
+
+FABRIC="${HOME}/.config/fabric/.env"
+
+# Check if a local vendor is specified and if it's running
+check_local_vendor() {
+  local vendor="$1"
+  
+  case "$vendor" in
+    "LM Studio")
+      if curl -s --connect-timeout 2 "http://localhost:1234/v1/models" >/dev/null 2>&1; then
+        echo "running"
+      else
+        echo "not_running"
+      fi
+      ;;
+    "Ollama")
+      if curl -s --connect-timeout 2 "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1; then
+        echo "running"
+      else
+        echo "not_running"
+      fi
+      ;;
+    *)
+      echo "not_local"
+      ;;
+  esac
+}
+
+# Parse arguments to find -V value
+get_vendor_from_args() {
+  local in_vendor=false
+  
+  for arg in "$@"; do
+    if [[ "$arg" == "-V" ]] || [[ "$arg" == "--vendor" ]]; then
+      in_vendor=true
+      continue
+    fi
+    if [[ "$in_vendor" == true ]]; then
+      if [[ "$arg" == -* ]]; then
+        in_vendor=false
+        continue
+      fi
+      echo "$arg"
+      return
+    fi
+  done
+  echo ""
+}
+
+# Main logic
+main() {
+  local vendor
+  vendor="$(get_vendor_from_args "$@")"
+  
+  if [[ -n "$vendor" ]]; then
+    local status
+    status="$(check_local_vendor "$vendor")"
+    
+    if [[ "$status" == "not_running" ]]; then
+      echo "⚠️  $vendor not running, using default model..." >&2
+      
+      # Rebuild args: remove -V/--vendor and its value, and -m and its value
+      local new_args=()
+      local last_arg=""
+      
+      for arg in "$@"; do
+        # Skip -V/--vendor and its value
+        if [[ "$arg" == "-V" ]] || [[ "$arg" == "--vendor" ]]; then
+          last_arg="-V"
+          continue
+        fi
+        if [[ "$last_arg" == "-V" && "$arg" != -* ]]; then
+          last_arg=""
+          continue
+        fi
+        
+        # Skip -m/--model and its value
+        if [[ "$arg" == "-m" ]] || [[ "$arg" == "--model" ]]; then
+          last_arg="-m"
+          continue
+        fi
+        if [[ "$last_arg" == "-m" && "$arg" != -* ]]; then
+          last_arg=""
+          continue
+        fi
+        
+        last_arg="$arg"
+        new_args+=("$arg")
+      done
+      
+      exec fabric-ai "${new_args[@]}"
+    fi
+  fi
+  
+  # Normal execution
+  exec fabric-ai "$@"
+}
+
+main "$@"

@@ -1,5 +1,7 @@
 # Skill: Resume HEIC2JPG Project
 
+> **⚠️ STALE PATHS** (2026-06-05): This skill references old Linux paths (`/home/fabio/`) that should be `~/projetos/hub/.myscripts/` on macOS. Update paths before using. The script itself (`heic2jpg.sh`) still lives in .myscripts/ and is functional.
+
 **Skill ID**: `heic2jpg-resume`
 **Purpose**: Resume work on the HEIC to JPG bulk converter implementation
 **Project**: Multi-session development of `heic2jpg.sh`

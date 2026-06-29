@@ -1,0 +1,204 @@
+#!/bin/bash
+# obsidian-polish-v3 - Orchestrator using Fabric + Obsidian CLI
+#
+# This script demonstrates the new architecture:
+# 1. Read file via Obsidian CLI
+# 2. Apply Fabric skill (pattern)
+# 3. Parse output
+# 4. Write back via Obsidian CLI
+# 5. Rename via Obsidian CLI
+
+set -e
+
+# Configuration
+VAULT="obsidian_vault"
+FABRIC_PATTERN="obsidian_note_polish"
+
+# Check for obsidian command
+if ! command -v obsidian &> /dev/null; then
+    echo "Error: obsidian command not found"
+    echo "Install Obsidian CLI or add to PATH"
+    exit 1
+fi
+
+# Check for fabric command (try fabric, fabric-ai, or mfab)
+if command -v fabric-ai &> /dev/null; then
+    FABRIC_CMD="fabric-ai"
+elif command -v fabric &> /dev/null; then
+    FABRIC_CMD="fabric"
+elif command -v mfab &> /dev/null; then
+    FABRIC_CMD="mfab"
+else
+    echo "Error: fabric command not found (tried: fabric-ai, fabric, mfab)"
+    exit 1
+fi
+
+echo "Using fabric command: $FABRIC_CMD"
+
+# Usage
+usage() {
+    echo "Usage: $0 <file-path-relative-to-vault>"
+    echo ""
+    echo "Example:"
+    echo "  $0 agents/untitled-note.md"
+    echo "  $0 2026-04-22-my-note.md"
+    echo ""
+    echo "What it does:"
+    echo "  1. Read file content via Obsidian CLI"
+    echo "  2. Apply Fabric polish pattern (generates title + frontmatter)"
+    echo "  3. Extract title and frontmatter from output"
+    echo "  4. Set properties via Obsidian CLI"
+    echo "  5. Rename file via Obsidian CLI"
+    exit 1
+}
+
+# Check arguments
+if [ "$#" -lt 1 ]; then
+    usage
+fi
+
+FILE_PATH="$1"
+
+echo "=== Obsidian Polish v3 (Fabric + CLI) ==="
+echo "File: $FILE_PATH"
+echo ""
+
+# Step 1: Read file via CLI
+echo "Step 1: Reading file via Obsidian CLI..."
+CONTENT=$(obsidian read vault="$VAULT" path="$FILE_PATH")
+
+if [ -z "$CONTENT" ]; then
+    echo "Error: Could not read file or file is empty"
+    exit 1
+fi
+
+echo "✓ Read $(echo "$CONTENT" | wc -c) characters"
+echo ""
+
+# Step 2: Apply Fabric skill
+echo "Step 2: Applying Fabric pattern: $FABRIC_PATTERN..."
+OUTPUT=$(echo "$CONTENT" | $FABRIC_CMD -p "$FABRIC_PATTERN")
+
+if [ -z "$OUTPUT" ]; then
+    echo "Error: Fabric pattern produced no output"
+    exit 1
+fi
+
+echo "✓ Fabric pattern applied"
+echo ""
+
+# Step 3: Parse output
+echo "Step 3: Parsing output..."
+
+# Extract TITLE (same line as "TITLE:")
+TITLE=$(echo "$OUTPUT" | grep "^TITLE:" | sed 's/^TITLE: *//' | sed 's/^ *//;s/ *$//')
+
+# Extract FRONTMATTER (everything between first --- and second --- after "FRONTMATTER:")
+FRONTMATTER=$(echo "$OUTPUT" | awk '/^FRONTMATTER:$/,0{if(/^---$/ && !in_yaml) in_yaml=1; else if(/^---$/ && in_yaml) exit; if(in_yaml) print}')
+
+echo "✓ Title: $TITLE"
+echo "✓ Frontmatter extracted ($(echo "$FRONTMATTER" | wc -l) lines)"
+echo ""
+
+# Step 4: Set properties via CLI
+echo "Step 4: Setting properties via Obsidian CLI..."
+
+# Parse frontmatter to extract individual properties
+# Extract title
+if echo "$FRONTMATTER" | grep -q "^title:"; then
+    TITLE_VALUE=$(echo "$FRONTMATTER" | grep "^title:" | sed 's/^title: *//' | tr -d '"')
+    obsidian property:set vault="$VAULT" path="$FILE_PATH" name="title" value="$TITLE_VALUE" > /dev/null 2>&1
+    echo "  ✓ Set title: $TITLE_VALUE"
+fi
+
+# Extract aliases
+if echo "$FRONTMATTER" | grep -q "^aliases:"; then
+    # Extract aliases list (simplified)
+    ALIASES=$(echo "$FRONTMATTER" | awk '/^aliases:/{flag=1; next} /^---/{exit} flag{print}' | grep "^  -" | sed 's/^  - //' | tr '\n' ',' | sed 's/,$//')
+    if [ -n "$ALIASES" ]; then
+        obsidian property:set vault="$VAULT" path="$FILE_PATH" name="aliases" value="[$ALIASES]" type=list > /dev/null 2>&1
+        echo "  ✓ Set aliases: [$ALIASES]"
+    fi
+fi
+
+# Extract tags
+if echo "$FRONTMATTER" | grep -q "^tags:"; then
+    TAGS=$(echo "$FRONTMATTER" | awk '/^tags:/{flag=1; next} /^[a-z]/{if(flag) exit} flag{print}' | grep "^  -" | sed 's/^  - //' | tr '\n' ',' | sed 's/,$//')
+    if [ -n "$TAGS" ]; then
+        obsidian property:set vault="$VAULT" path="$FILE_PATH" name="tags" value="[$TAGS]" type=list > /dev/null 2>&1
+        echo "  ✓ Set tags: [$TAGS]"
+    fi
+fi
+
+# Extract type
+if echo "$FRONTMATTER" | grep -q "^type:"; then
+    TYPE=$(echo "$FRONTMATTER" | grep "^type:" | sed 's/^type: *//')
+    obsidian property:set vault="$VAULT" path="$FILE_PATH" name="type" value="$TYPE" > /dev/null 2>&1
+    echo "  ✓ Set type: $TYPE"
+fi
+
+# Extract status
+if echo "$FRONTMATTER" | grep -q "^status:"; then
+    STATUS=$(echo "$FRONTMATTER" | grep "^status:" | sed 's/^status: *//')
+    obsidian property:set vault="$VAULT" path="$FILE_PATH" name="status" value="$STATUS" > /dev/null 2>&1
+    echo "  ✓ Set status: $STATUS"
+fi
+
+# Extract created
+if echo "$FRONTMATTER" | grep -q "^created:"; then
+    CREATED=$(echo "$FRONTMATTER" | grep "^created:" | sed 's/^created: *//')
+    obsidian property:set vault="$VAULT" path="$FILE_PATH" name="created" value="$CREATED" type=date > /dev/null 2>&1
+    echo "  ✓ Set created: $CREATED"
+fi
+
+# Extract summary
+if echo "$FRONTMATTER" | grep -q "^summary:"; then
+    SUMMARY=$(echo "$FRONTMATTER" | grep "^summary:" | sed 's/^summary: *//')
+    obsidian property:set vault="$VAULT" path="$FILE_PATH" name="summary" value="$SUMMARY" > /dev/null 2>&1
+    echo "  ✓ Set summary: $SUMMARY"
+fi
+
+echo ""
+
+# Step 5: Rename file via CLI
+echo "Step 5: Renaming file via Obsidian CLI..."
+
+# Slugify the title
+SLUG_TITLE=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-zA-Z0-9]+/-/g' | sed 's/^-+|-+$//g')
+
+# Extract current filename
+CURRENT_FILENAME=$(basename "$FILE_PATH")
+
+# Extract extension
+EXT="${CURRENT_FILENAME##*.}"
+
+# New filename
+NEW_FILENAME="${SLUG_TITLE}.${EXT}"
+
+# Skip if same
+if [ "$CURRENT_FILENAME" = "$NEW_FILENAME" ]; then
+    echo "✓ File already has correct name"
+else
+    # Get directory
+    DIR=$(dirname "$FILE_PATH")
+
+    # New full path
+    NEW_PATH="${DIR}/${NEW_FILENAME}"
+
+    # Rename via CLI
+    obsidian rename vault="$VAULT" path="$FILE_PATH" name="$SLUG_TITLE" > /dev/null 2>&1
+
+    if [ $? -eq 0 ]; then
+        echo "✓ Renamed to: $NEW_FILENAME"
+        FILE_PATH="$NEW_PATH"  # Update for final message
+    else
+        echo "⚠ Rename failed (file may already exist)"
+    fi
+fi
+
+echo ""
+echo "=== Polish Complete ==="
+echo "Final file: $FILE_PATH"
+echo "Title: $TITLE"
+echo ""
+echo "View in Obsidian or check file for updated properties"

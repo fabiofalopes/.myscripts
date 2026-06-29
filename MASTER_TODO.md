@@ -1,8 +1,22 @@
 # .myscripts/ — Master TODO & Progress Tracker
 
 **Purpose**: Single source of truth. Any session loads this, knows exactly what was done, what's next, and how to execute.
-**Updated**: 2026-05-30
+**Updated**: 2026-06-29
 **Session command**: `Load: ~/projetos/hub/.myscripts/MASTER_TODO.md`
+
+---
+
+## ⚠️ CAMPAIGN STATE (read first)
+
+The extraction + greenfield campaign (P0–P2, E1–E6, G1–G3) is **functionally complete** — all builds are done and on disk. However, as of this update the campaign is in a **stabilization-required** state. Three governance gaps must be resolved before this work is considered safe/finished:
+
+| # | Gap | Impact | Owner |
+|---|-----|--------|-------|
+| **G-VC** | Entire campaign is **UNCOMMITTED**. `.myscripts/` last commit is `70aebd0` (pre-campaign). All extractions/deletions/greenfield builds sit in the working tree. `hub/` is **not a git repo**; **0 of 9** extracted projects have `.git`. | One `git checkout .` or `rm -rf hub/` = 12 days of work lost. | Human — see `HUMAN.md` |
+| **G-SRC** | Greenfield source scripts were **NOT deleted** (unlike extractions E1–E6 which deleted sources). Still present: `obsidian-polish`, `obsidian-polish-v3`, `or-bench`, `or-model-select`, `reddit_to_markdown.sh` (2,237 lines total). | Duplicate/divergent logic. | Human — see `HUMAN.md` |
+| **G-DRIFT** | Tracking files had drifted. This update (2026-06-29) reconciles them. `HANDOFF_INDEX.md`, `AGENTS.md`, `NOTES.md` previously claimed "48/67, 72%" and "G2/G3 not started" — both wrong. | Resolved in this pass. | ✅ Done |
+
+These gaps are tracked as **Phase 4: Stabilization & Hardening** (S1–S6 below). That phase is **deferred to the human** (see `HUMAN.md`).
 
 ---
 
@@ -43,84 +57,84 @@ Priority: Move proven apps out of .myscripts into hub/ as standalone repos.
 
 | ID | Step | Status | Depends On | Notes |
 |----|------|--------|-----------|-------|
-| E1.1 | Copy files to hub/ytobs/ | ⬜ | — | cp -a everything except __pycache__, .fabric/, .opencode/, .vscode/ |
-| E1.2 | Write pyproject.toml | ⬜ | E1.1 | Full spec in handoff § pyproject.toml Specification |
-| E1.3 | Rename lib/ → ytobs/ | ⬜ | E1.1 | Standard package layout |
-| E1.4 | Fix validator.py import bug | ⬜ | E1.3 | `from lib.exceptions` → `from .exceptions` (CRITICAL) |
-| E1.5 | Add __version__ to __init__.py | ⬜ | E1.3 | `__version__ = "4.0.0"` |
-| E1.6 | Create ytobs/cli.py from old yt script | ⬜ | E1.3 | Migrate main() and create_parser() |
-| E1.7 | Delete old yt and yt-obsidian.py | ⬜ | E1.6 | No longer needed after cli.py exists |
-| E1.8 | Update ~/.zshrc — kill ytobs() shell function | ⬜ | E1.6 | Replace with pip-installed entry point |
-| E1.9 | Create venv + pip install -e . | ⬜ | E1.2, E1.6 | Test import chain |
-| E1.10 | Update all documentation paths | ⬜ | E1.1 | CONTEXT.md, START_HERE.md, SETUP.md, README.md, docs/ |
-| E1.11 | Rewrite requirements.txt | ⬜ | E1.1 | Remove pydantic (dead dep), loosen versions |
-| E1.12 | Verify — ytobs --help | ⬜ | E1.9 | Test CLI works |
-| E1.13 | Verify — ytobs --version | ⬜ | E1.9 | Should print "ytobs 4.0.0" |
-| E1.14 | Verify — ytobs --list-processed | ⬜ | E1.9 | Should show 76 cached videos |
-| E1.15 | Verify — config auto-creation | ⬜ | E1.9 | Delete ~/.yt-obsidian/config.yml, run ytobs --help, check it recreates |
-| E1.16 | Delete source in .myscripts/ | ⬜ | E1.12-15 | Only after all verification passes |
-| E1.17 | Update this TODO → mark E1 done | ⬜ | E1.16 | — |
+| E1.1 | Copy files to hub/ytobs/ | ✅ | — | cp -a everything except __pycache__, .fabric/, .opencode/, .vscode/ |
+| E1.2 | Write pyproject.toml | ✅ | E1.1 | Full spec in handoff § pyproject.toml Specification |
+| E1.3 | Rename lib/ → ytobs/ | ✅ | E1.1 | Standard package layout |
+| E1.4 | Fix validator.py import bug | ✅ | E1.3 | `from lib.exceptions` → `from .exceptions` (CRITICAL) |
+| E1.5 | Add __version__ to __init__.py | ✅ | E1.3 | `__version__ = "4.0.0"` |
+| E1.6 | Create ytobs/cli.py from old yt script | ✅ | E1.3 | Migrate main() and create_parser() |
+| E1.7 | Delete old yt and yt-obsidian.py | ✅ | E1.6 | No longer needed after cli.py exists |
+| E1.8 | Update ~/.zshrc — kill ytobs() shell function | ✅ | E1.6 | Replaced with pip-installed entry point comment |
+| E1.9 | Create venv + pip install -e . | ✅ | E1.2, E1.6 | Test import chain |
+| E1.10 | Update all documentation paths | ✅ | E1.1 | CONTEXT.md, START_HERE.md, SETUP.md, README.md, docs/ |
+| E1.11 | Rewrite requirements.txt | ✅ | E1.1 | Remove pydantic (dead dep), loosen versions |
+| E1.12 | Verify — ytobs --help | ✅ | E1.9 | Test CLI works |
+| E1.13 | Verify — ytobs --version | ✅ | E1.9 | Should print "ytobs 4.0.0" |
+| E1.14 | Verify — ytobs --list-processed | ✅ | E1.9 | Shows 76 cached videos |
+| E1.15 | Verify — config auto-creation | ✅ | E1.9 | Delete ~/.yt-obsidian/config.yml, run ytobs vault, verify it recreates |
+| E1.16 | Delete source in .myscripts/ | ✅ | E1.12-15 | Done — handoff preserved in hub/ytobs/archive/ |
+| E1.17 | Update this TODO → mark E1 done | ✅ | E1.16 | — |
 
 ### E2: fabric-graph-agents
 
 **Source**: `.myscripts/fabric-graph-agents/` → **Target**: `hub/fabric-graph-agents/`
-**Handoff**: Not yet written
+**Handoff**: `hub/fabric-graph-agents/archive/HANDOFF_extraction.md`
 **Estimate**: 1 hour (simpler extraction — no packaging needed, shell-based)
 
 | ID | Step | Status | Depends On | Notes |
 |----|------|--------|-----------|-------|
-| E2.1 | Write extraction handoff | ⬜ | — | Model on ytobs handoff format |
-| E2.2 | Copy to hub/fabric-graph-agents/ | ⬜ | E2.1 | — |
-| E2.3 | Delete backup dir in .myscripts/ | ⬜ | E2.2 | `fabric-graph-agents-backup-20251027-193604/` — superseded |
-| E2.4 | Update this TODO | ⬜ | E2.3 | — |
+| E2.1 | Write extraction handoff | ✅ | — | Written, archived with project |
+| E2.2 | Copy to hub/fabric-graph-agents/ | ✅ | E2.1 | 89 files, symlink to fabric-custom-patterns |
+| E2.3 | Delete backup dir in .myscripts/ | ✅ | E2.2 | `fabric-graph-agents-backup-20251027-193604/` — deleted |
+| E2.4 | Update this TODO | ✅ | E2.3 | — |
 
 ### E3: circuit-board-knowledge-extractor
 
 **Source**: `.myscripts/circuit-board-knowledge-extractor/` → **Target**: `hub/circuit-extractor/`
-**Handoff**: Not yet written
-**Estimate**: 1 hour
+**Handoff**: `hub/circuit-extractor/archive/HANDOFF_extraction.md`
+**Estimate**: 15 min (very simple — 14 files)
 
 | ID | Step | Status | Depends On | Notes |
 |----|------|--------|-----------|-------|
-| E3.1 | Write extraction handoff | ⬜ | — | — |
-| E3.2 | Copy to hub/circuit-extractor/ | ⬜ | E3.1 | — |
-| E3.3 | Update this TODO | ⬜ | E3.2 | — |
+| E3.1 | Write extraction handoff | ✅ | — | Written, archived with project |
+| E3.2 | Copy to hub/circuit-extractor/ | ✅ | E3.1 | 14 files copied, paths updated |
+| E3.3 | Update this TODO | ✅ | E3.2 | — |
 
 ### E4: fabric-image-analysis
 
 **Source**: `.myscripts/fabric-image-analysis/` → **Target**: `hub/fabric-image-analysis/`
-**Handoff**: Not yet written
-**Estimate**: 30 min
+**Handoff**: `hub/fabric-image-analysis/archive/HANDOFF_extraction.md`
+**Estimate**: 5 min (9 files)
 
 | ID | Step | Status | Depends On | Notes |
 |----|------|--------|-----------|-------|
-| E4.1 | Write extraction handoff | ⬜ | — | — |
-| E4.2 | Copy to hub/ | ⬜ | E4.1 | — |
-| E4.3 | Update this TODO | ⬜ | E4.2 | — |
+| E4.1 | Write extraction handoff | ✅ | — | Written, archived with project |
+| E4.2 | Copy to hub/ | ✅ | E4.1 | 9 files copied |
+| E4.3 | Update this TODO | ✅ | E4.2 | — |
 
 ### E5: jumpserver-deploy
 
 **Source**: `.myscripts/dockerfiles/jumpserver-deploy/` → **Target**: `hub/jumpserver-deploy/`
-**Handoff**: Not yet written
-**Estimate**: 30 min
+**Handoff**: `hub/jumpserver-deploy/archive/HANDOFF_extraction.md`
+**Estimate**: 5 min (16 files)
 
 | ID | Step | Status | Depends On | Notes |
 |----|------|--------|-----------|-------|
-| E5.1 | Write extraction handoff | ⬜ | — | — |
-| E5.2 | Copy to hub/ | ⬜ | E5.1 | Includes docker-compose + 5 scripts |
-| E5.3 | Update this TODO | ⬜ | E5.2 | — |
+| E5.1 | Write extraction handoff | ✅ | — | Written, archived with project |
+| E5.2 | Copy to hub/ | ✅ | E5.1 | docker-compose + 6 scripts + branding |
+| E5.3 | Update this TODO | ✅ | E5.2 | — |
 
 ### E6: tmux
 
 **Source**: `.myscripts/tmux/` → **Target**: `hub/portable-tmux/`
-**Handoff**: Not yet written
-**Estimate**: 30 min
+**Handoff**: `hub/portable-tmux/archive/HANDOFF_extraction.md`
+**Estimate**: 5 min (21 files)
 
 | ID | Step | Status | Depends On | Notes |
 |----|------|--------|-----------|-------|
-| E6.1 | Write extraction handoff | ⬜ | — | — |
-| E6.2 | Copy to hub/ | ⬜ | E6.1 | — |
-| E6.3 | Update this TODO | ⬜ | E6.2 | — |
+| E6.1 | Write extraction handoff | ✅ | — | Written, archived with project |
+| E6.2 | Copy to hub/ | ✅ | E6.1 | 21 files copied |
+| E6.3 | Update this TODO | ✅ | E6.2 | — |
 
 ---
 
@@ -133,21 +147,21 @@ Priority: Build proven scripts into full applications modeled on ytobs architect
 **Source**: `reddit_to_markdown.sh` (120-line bash script with embedded Python)
 **Target**: `hub/reddit-obsidian/` — full pip-installable app
 **Gap**: 87% missing (no lib, no config, no cache, no AI, no CLI)
-**Handoff**: Not yet written
+**Handoff**: GREENFIELDS/reddit_obsidian_spec.md
 **Estimate**: 3-5 hours
 
 | ID | Step | Status | Depends On | Notes |
 |----|------|--------|-----------|-------|
-| G1.1 | Write build spec handoff | ⬜ | — | Model architecture on ytobs |
-| G1.2 | Create hub/reddit-obsidian/ scaffold | ⬜ | G1.1 | pyproject.toml, ytobs-style structure |
-| G1.3 | Build lib/extractor.py | ⬜ | G1.2 | Reddit JSON API → structured data (praw optional) |
-| G1.4 | Build lib/formatter.py | ⬜ | G1.2 | Structured data → Obsidian markdown with YAML frontmatter |
-| G1.5 | Build lib/cache_manager.py | ⬜ | G1.2 | Duplicate prevention, incremental updates |
-| G1.6 | Build CLI with argparse | ⬜ | G1.3-5 | Subcommands: process, status, search |
-| G1.7 | Add AI analysis layer | ⬜ | G1.6 | Fabric pattern integration for content analysis |
-| G1.8 | Write docs (README, CONTEXT, HELP) | ⬜ | G1.6 | — |
-| G1.9 | Test end-to-end | ⬜ | G1.8 | Process real Reddit threads |
-| G1.10 | Update this TODO | ⬜ | G1.9 | — |
+| G1.1 | Write build spec handoff | ✅ | — | Model architecture on ytobs |
+| G1.2 | Create hub/reddit-obsidian/ scaffold | ✅ | G1.1 | pyproject.toml, ytobs-style structure |
+| G1.3 | Build extractor module | ✅ | G1.2 | HTML scraping of old.reddit.com (Reddit JSON API is dead — 403) |
+| G1.4 | Build formatter module | ✅ | G1.2 | YAML frontmatter + threaded comments markdown |
+| G1.5 | Build cache_manager module | ✅ | G1.2 | Immutable cache with CRUD, search, stats |
+| G1.6 | Build CLI with argparse | ✅ | G1.3-5 | Subcommands: fetch, status, search, vault |
+| G1.7 | Add AI analysis layer | ✅ | G1.6 | Fabric pattern integration (fabric_client.py) |
+| G1.8 | Write docs (README, CONTEXT, HELP) | ✅ | G1.6 | README.md, CONTEXT.md, HELP.md written |
+| G1.9 | Test end-to-end | ✅ | G1.8 | Real Reddit thread fetched, comments extracted, CLI all verified |
+| G1.10 | Update this TODO | ✅ | G1.9 | G1 code complete and verified |
 
 ### G2: obsidian-polish
 
@@ -159,14 +173,14 @@ Priority: Build proven scripts into full applications modeled on ytobs architect
 
 | ID | Step | Status | Depends On | Notes |
 |----|------|--------|-----------|-------|
-| G2.1 | Write build spec handoff | ⬜ | — | Merge v3 prototype into v1 features |
-| G2.2 | Create hub/obsidian-polish/ scaffold | ⬜ | G2.1 | — |
-| G2.3 | Split into lib/ modules | ⬜ | G2.2 | frontmatter.py, title_gen.py, rename.py, fabric.py |
-| G2.4 | Build CLI with subcommands | ⬜ | G2.3 | polish, batch, rename-only, title-only, pipe mode |
-| G2.5 | Add config file | ⬜ | G2.2 | Default patterns, vault path, naming conventions |
-| G2.6 | Test all modes | ⬜ | G2.5 | In-place, pipe, batch, rename |
-| G2.7 | Delete old backups from .myscripts/ | ⬜ | G2.6 | 3 backup files — superseded |
-| G2.8 | Update this TODO | ⬜ | G2.7 | — |
+| G2.1 | Write build spec handoff | ✅ | — | Spec at GREENFIELDS/obsidian_polish_spec.md |
+| G2.2 | Create hub/obsidian-polish/ scaffold | ✅ | G2.1 | pyproject.toml, .gitignore, LICENSE, package dir |
+| G2.3 | Split into lib/ modules | ✅ | G2.2 | 9 modules: cli, polisher, frontmatter, categorizer, fabric_client, filesystem, config, exceptions, __init__ |
+| G2.4 | Build CLI with subcommands | ✅ | G2.3 | polish, batch, pipe, rename-only, title-only, frontmatter-only |
+| G2.5 | Add config file | ✅ | G2.2 | ~/.obsidian-polish/config.yml with defaults |
+| G2.6 | Test all modes | ✅ | G2.5 | Pipe, batch, single file — all verified |
+| G2.7 | Delete old backups from .myscripts/ | ✅ | G2.6 | 3 backup dirs deleted |
+| G2.8 | Update this TODO | ✅ | G2.7 | — |
 
 ### G3: or-bench
 
@@ -178,14 +192,14 @@ Priority: Build proven scripts into full applications modeled on ytobs architect
 
 | ID | Step | Status | Depends On | Notes |
 |----|------|--------|-----------|-------|
-| G3.1 | Write build spec handoff | ⬜ | — | Merge two scripts into one package |
-| G3.2 | Create hub/or-bench/ scaffold | ⬜ | G3.1 | — |
-| G3.3 | Split into lib/ modules | ⬜ | G3.2 | benchmark.py, cache.py, selector.py, display.py |
-| G3.4 | Build CLI with subcommands | ⬜ | G3.3 | bench, select, stats, list |
-| G3.5 | Add terminal UI for live results | ⬜ | G3.4 | Rich library or simple progress bars |
-| G3.6 | Package with pyproject.toml | ⬜ | G3.5 | — |
-| G3.7 | Test with real OpenRouter models | ⬜ | G3.6 | — |
-| G3.8 | Update this TODO | ⬜ | G3.7 | — |
+| G3.1 | Write build spec handoff | ✅ | — | Spec at GREENFIELDS/or_bench_spec.md |
+| G3.2 | Create hub/or-bench/ scaffold | ✅ | G3.1 | pyproject.toml, .gitignore, LICENSE, package dir |
+| G3.3 | Split into lib/ modules | ✅ | G3.2 | 9 modules: cli, benchmark, selector, cache, display, models, config, exceptions, __init__ |
+| G3.4 | Build CLI with subcommands | ✅ | G3.3 | bench, list, select, history, last, stats |
+| G3.5 | Add terminal UI for live results | ✅ | G3.4 | Colored output with speed tiers (green ≥60, cyan ≥25, yellow ≥10, red <10) |
+| G3.6 | Package with pyproject.toml | ✅ | G3.5 | Zero external deps, stdlib only |
+| G3.7 | Test with real OpenRouter models | ⬜ | G3.6 | Need API key — skip for now (original script already proven) |
+| G3.8 | Update this TODO | ✅ | G3.7 | — |
 
 ### G4-G6: Lower Priority Greenfields
 
@@ -201,10 +215,26 @@ Priority: Build proven scripts into full applications modeled on ytobs architect
 
 | ID | Task | Status | Depends On | Notes |
 |----|------|--------|-----------|-------|
-| C1 | Delete `meta/` (empty dir) | ⬜ | — | Zero content. Just rm -rf. |
-| C2 | Delete backup dirs | ⬜ | E2.2 | fabric-graph-agents-backup + obsidian-polish backups + slugfile backup — 5 items total. Only delete AFTER verifying the extracted versions work. |
-| C3 | Deprecate voice_note.sh | ⬜ | — | Already has full app at hub/voice_note/. Add deprecation notice to script. |
-| C4 | Review docs/ cross-references | ⬜ | — | 24 docs that reference projects by old .myscripts paths. Update as projects are extracted. |
+| C1 | Delete `meta/` (empty dir) | ✅ | — | Done 2026-06-05 |
+| C2 | Delete backup dirs | ✅ | — | All 5 backup dirs deleted (fabric-graph-agents-backup deleted during E2, slugfile + 3 obsidian-polish backups deleted 2026-06-05) |
+| C3 | Deprecate voice_note.sh | ✅ | — | Done 2026-06-05 — added deprecation notice |
+| C4 | Review docs/ cross-references | ⬜ | — | **31 files** contain stale `~/.myscripts/` refs (recounted 2026-06-29; paths still resolve, just point to old pre-extraction locations). Bulk find/replace when ready. |
+
+---
+
+## PHASE 4: Stabilization & Hardening
+
+> Deferred to the human. Full context + decision options in `HUMAN.md`.
+> Scope deliberately **narrowed**: `.myscripts/` is the focused repo going forward. `hub/` projects are extracted/external.
+
+| ID | Task | Status | Depends On | Notes |
+|----|------|--------|-----------|-------|
+| S1 | Commit `.myscripts/` working tree | ⬜ | — | Snapshot the entire campaign. Last commit `70aebd0` is pre-campaign. |
+| S2 | Version `hub/` projects | ⬜ | S1 | 0/9 have `.git`. Strategy = per-project repos (human decision). See `HUMAN.md`. |
+| S3 | Decide greenfield source scripts | ⬜ | S2 | Delete (match E1–E6 policy) or consciously retain: `obsidian-polish`, `obsidian-polish-v3`, `or-bench`, `or-model-select`, `reddit_to_markdown.sh`. |
+| S4 | Remove junk dirs | ⬜ | — | `hub/.mysscripts/` (typo, empty), `hub/temp-sorry-deleleme-…/`, `.myscripts/dockerfiles/` (empty after E5). |
+| S5 | Smoke-verify all packages | ⬜ | S2 | Import + `--help` + `--version` for 4 Python pkgs; structure check for 5 shell pkgs. Parallel subagents. |
+| S6 | Fix C4 stale doc refs | ⬜ | — | Bulk find/replace across 31 files in `docs/`. |
 
 ---
 
@@ -213,14 +243,24 @@ Priority: Build proven scripts into full applications modeled on ytobs architect
 | Phase | Total Tasks | Done | In Progress | Remaining |
 |-------|------------|------|-------------|-----------|
 | P0: Audit & Planning | 5 | 5 | 0 | 0 |
-| E1: ytobs extraction | 17 | 0 | 0 | 17 |
-| E2-6: Other extractions | 12 | 0 | 0 | 12 |
-| G1-3: Priority greenfields | 26 | 0 | 0 | 26 |
+| E1: ytobs extraction | 17 | 17 | 0 | 0 |
+| E2: fabric-graph-agents | 4 | 4 | 0 | 0 |
+| E3: circuit-extractor | 3 | 3 | 0 | 0 |
+| E4: fabric-image-analysis | 3 | 3 | 0 | 0 |
+| E5: jumpserver-deploy | 3 | 3 | 0 | 0 |
+| E6: portable-tmux | 3 | 3 | 0 | 0 |
+| G1: reddit-obsidian | 10 | 10 | 0 | 0 |
+| G2: obsidian-polish | 8 | 8 | 0 | 0 |
+| G3: or-bench | 8 | 7 | 0 | 1 |
 | G4-6: Lower greenfields | 3 | 0 | 0 | 3 |
-| C: Cleanup | 4 | 0 | 0 | 4 |
-| **TOTAL** | **67** | **5** | **0** | **62** |
+| C: Cleanup | 4 | 3 | 0 | 1 |
+| **P1–P3 subtotal** | **71** | **66** | **0** | **5** |
+| S: Stabilization (Phase 4) | 6 | 0 | 0 | 6 (deferred → human) |
+| **TOTAL (incl. Phase 4)** | **77** | **66** | **0** | **11** |
 
-**Overall**: 7% complete. Phase 0 (planning) is done. Ready to start Phase 1 (E1: ytobs extraction).
+**Build status**: 93% of the extraction/greenfield campaign (P1–P3) is complete and verified on disk (66/71). Packages modified as recently as 2026-06-11.
+
+**Campaign health**: ⚠️ **stabilization-required**. All P1–P3 work is uncommitted (`.myscripts/` last commit is pre-campaign) and `hub/` is unversioned (0/9 projects have git). Phase 4 (S1–S6) covers committing, versioning, source cleanup, and verification — **deferred to the human**, see `HUMAN.md`.
 
 ---
 
@@ -263,3 +303,19 @@ Example — to start ytobs extraction:
 | Date | What Happened |
 |------|--------------|
 | 2026-05-30 | Phase 0 complete. Full audit of all 77 entries. Created audit doc, ytobs handoff, index, and this TODO. Ready for Phase 1 execution. |
+| 2026-05-30 | E1 (ytobs) extracted to hub/ytobs/. 29 item checklist complete. CLI verified. |
+| 2026-05-30 | E2 (fabric-graph-agents) extracted to hub/fabric-graph-agents/. 10 item checklist complete. |
+| 2026-05-30 | E4 (fabric-image-analysis) 9 files → hub/fabric-image-analysis/ |
+| 2026-05-30 | E5 (jumpserver-deploy) 16 files → hub/jumpserver-deploy/ |
+| 2026-05-30 | E6 (tmux) 21 files → hub/portable-tmux/ |
+| 2026-05-30 | Phase 1 (all extractions) complete. 38/67 tasks (57%). |
+| 2026-05-30 | **E1 COMPLETE**. ytobs extracted from .myscripts to hub/ytobs/. All 29 handoff items executed. pip-installable CLI working. |
+| 2026-06-02 | **G1 (reddit-obsidian) code complete**. 8 Python modules written (1,696 lines). CLI verified: --version, --help, vault, status, search, --list-processed, bare URL auto-insert all working. Docs + real-thread test pending. 45/67 tasks (67%). |
+| 2026-06-02 | **G1 fully complete**. Extractor rewritten from JSON API → HTML scraping of old.reddit.com (Reddit now blocks .json + www.reddit.com). Full E2E test with real AskReddit thread: fetch, cache, status, search, vault, --force, --comments-only all verified. beautifulsoup4 added as dependency. 48/67 tasks (72%). |
+| 2026-06-05 | **Organizational review**. Updated AGENTS.md (full project overview), HANDOFF_INDEX.md (complete rewrite with all project statuses), GREENFIELDS/reddit_obsidian_spec.md (marked implemented, noted HTML scraping pivot), NOTES.md (modernized), MASTER_TODO.md (fixed G1.3 note, expanded C4 with stale ref counts). Still 48/67 (72%). |
+| 2026-06-05 | **Aliases & PATH fixes**. Added `ytobs`, `reddit-obsidian`, `ro` aliases. Fixed stale fabric-graph-agents PATH entries in ~/.zshrc and ~/.bashrc. |
+| 2026-06-05 | **Quick wins (C1, C2a, C3)**. Deleted `meta/` dir, `slugfile.backup`, deprecated `voice_note.sh`. 51/67 (76%). |
+| 2026-06-05 | **G2 (obsidian-polish) built**. Full pip-installable app: 9 Python modules, CLI with all subcommands, pipe/batch/single modes, category detection, config management. Spec at GREENFIELDS/obsidian_polish_spec.md. Alias added. C2b backups deleted. 59/67 (88%). |
+| 2026-06-05 | **G3 (or-bench) built**. Merged or-bench (598 lines) + or-model-select (410 lines) into pip-installable package. 9 Python modules, 6 subcommands (bench, list, select, history, last, stats). Zero external deps. Alias added. 66/71 (93%). |
+| 2026-06-11 | Packages (obsidian-polish, or-bench) further tweaked — files modified on disk. Not reflected in tracker until next update. |
+| 2026-06-29 | **Stabilization review (this pass)**. Consultant-level audit of session `ses_185473a13ffe02gDMwSS6rpoda`. Identified 3 governance gaps: (1) entire campaign UNCOMMITTED, hub/ unversioned 0/9 git; (2) greenfield source scripts not deleted (2,237 lines); (3) tracker drift. Reconciled all tracking files to single source of truth (this file). Added Phase 4 (S1–S6 Stabilization, deferred to human). Created `HUMAN.md`. |

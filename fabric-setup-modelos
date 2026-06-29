@@ -1,0 +1,386 @@
+#!/usr/bin/env bash
+# fabric-setup-modelos — Configure fabric-ai to use the Lusofona Modelos LiteLLM endpoint
+#
+# Usage:
+#   fabric-setup-modelos                  # Interactive: prompts for API key
+#   fabric-setup-modelos --check          # Verify current setup status
+#   fabric-setup-modelos --list-models    # List available models on the endpoint
+#   fabric-setup-modelos --help
+#
+# What it does:
+#   1. Verifies fabric-ai is installed
+#   2. Checks for latest version
+#   3. Adds LITELLM_API_BASE_URL and LITELLM_API_KEY to ~/.config/fabric/.env
+#   4. Validates connectivity to the endpoint
+#   5. Optionally sets Modelos as default vendor
+#
+set -euo pipefail
+
+# ── Constants ─────────────────────────────────────────────────────────────────
+ENDPOINT_URL="https://modelos.ai.ulusofona.pt/v1"
+VENDOR="LiteLLM"
+FABRIC_ENV="${HOME}/.config/fabric/.env"
+ENV_BASE_URL_KEY="LITELLM_API_BASE_URL"
+ENV_API_KEY_KEY="LITELLM_API_KEY"
+SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
+
+# ── Colors (only if terminal supports it) ─────────────────────────────────────
+if [[ -t 1 ]]; then
+  RED='\033[0;31m'
+  GREEN='\033[0;32m'
+  YELLOW='\033[0;33m'
+  CYAN='\033[0;36m'
+  BOLD='\033[1m'
+  DIM='\033[2m'
+  RESET='\033[0m'
+else
+  RED='' GREEN='' YELLOW='' CYAN='' BOLD='' DIM='' RESET=''
+fi
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+_info()    { printf "${CYAN}ℹ${RESET}  %b\n" "$*"; }
+_ok()      { printf "${GREEN}✓${RESET}  %b\n" "$*"; }
+_warn()    { printf "${YELLOW}⚠${RESET}  %b\n" "$*"; }
+_err()     { printf "${RED}✗${RESET}  %b\n" "$*" >&2; }
+_heading() { printf "\n${BOLD}%b${RESET}\n" "$*"; }
+
+die() { _err "$@"; exit 1; }
+
+# ── Detect fabric binary ─────────────────────────────────────────────────────
+detect_fabric() {
+  if command -v fabric-ai &>/dev/null; then
+    echo "fabric-ai"
+  elif command -v fabric &>/dev/null; then
+    echo "fabric"
+  else
+    echo ""
+  fi
+}
+
+# ── Step 1: Prerequisites ─────────────────────────────────────────────────────
+check_prerequisites() {
+  _heading "Prerequisites"
+
+  # Check fabric is installed
+  local fab
+  fab="$(detect_fabric)"
+  if [[ -z "$fab" ]]; then
+    die "fabric-ai (or fabric) not found. Install with: brew install fabric-ai"
+  fi
+  _ok "Found: $fab ($($fab --version 2>&1))"
+
+  # Check for latest version
+  local latest
+  latest="$(brew info fabric-ai 2>/dev/null | sed -n 's/.*stable \([0-9.]*\).*/\1/p' | head -1 || true)"
+  local current
+  current="$($fab --version 2>&1 | sed 's/v//')"
+  if [[ -n "$latest" && "$latest" != "$current" ]]; then
+    _warn "Not on latest version (installed: v${current}, latest: v${latest})"
+    _info "Run: ${BOLD}brew upgrade fabric-ai${RESET}"
+  else
+    _ok "Version is up to date (v${current})"
+  fi
+
+  # Check .env exists
+  if [[ ! -f "$FABRIC_ENV" ]]; then
+    _warn "No .env found at $FABRIC_ENV"
+    _info "Creating empty .env..."
+    mkdir -p "$(dirname "$FABRIC_ENV")"
+    touch "$FABRIC_ENV"
+  fi
+  _ok "Config file: $FABRIC_ENV"
+}
+
+# ── Step 2: Configure .env ────────────────────────────────────────────────────
+configure_env() {
+  _heading "Configure Lusófona Modelos endpoint"
+
+  # Check if already configured
+  local existing_url existing_key
+  existing_url="$(grep -E "^${ENV_BASE_URL_KEY}=" "$FABRIC_ENV" 2>/dev/null | cut -d= -f2- || true)"
+  existing_key="$(grep -E "^${ENV_API_KEY_KEY}=" "$FABRIC_ENV" 2>/dev/null | cut -d= -f2- || true)"
+
+  if [[ -n "$existing_url" ]]; then
+    _info "Endpoint already configured: ${DIM}${existing_url}${RESET}"
+    if [[ "$existing_url" != "$ENDPOINT_URL" ]]; then
+      _warn "Existing URL differs from expected: ${ENDPOINT_URL}"
+      read -rp "Update to correct endpoint? [y/N] " -n 1
+      echo
+      if [[ ! "${REPLY}" =~ ^[Yy]$ ]]; then
+        _info "Keeping existing URL"
+        return
+      fi
+      update_env_value "$ENV_BASE_URL_KEY" "$ENDPOINT_URL"
+    fi
+  else
+    _info "Setting ${ENV_BASE_URL_KEY}=${ENDPOINT_URL}"
+    echo "${ENV_BASE_URL_KEY}=${ENDPOINT_URL}" >> "$FABRIC_ENV"
+    _ok "Endpoint URL added"
+  fi
+
+  if [[ -n "$existing_key" ]]; then
+    _ok "API key already set (${DIM}${existing_key:0:8}...${existing_key: -4}${RESET})"
+    read -rp "Replace existing key? [y/N] " -n 1
+    echo
+    if [[ ! "${REPLY}" =~ ^[Yy]$ ]]; then
+      _info "Keeping existing API key"
+      return
+    fi
+  fi
+
+  # Prompt for API key securely
+  _info "Enter your API key for ${ENDPOINT_URL}"
+  _info "(Input will be hidden)"
+  local api_key=""
+  while [[ -z "$api_key" ]]; do
+    read -rs -p "API Key: " api_key
+    echo
+    if [[ -z "$api_key" ]]; then
+      _warn "API key cannot be empty. Try again or Ctrl+C to abort."
+    fi
+  done
+
+  if [[ -n "$existing_key" ]]; then
+    update_env_value "$ENV_API_KEY_KEY" "$api_key"
+  else
+    echo "${ENV_API_KEY_KEY}=${api_key}" >> "$FABRIC_ENV"
+  fi
+  _ok "API key saved"
+}
+
+# Update a single key=value line in .env (or append if not found)
+update_env_value() {
+  local key="$1"
+  local value="$2"
+  local tmp
+  tmp="$(mktemp)"
+
+  if grep -q "^${key}=" "$FABRIC_ENV" 2>/dev/null; then
+    sed "s|^${key}=.*|${key}=${value}|" "$FABRIC_ENV" > "$tmp" && mv "$tmp" "$FABRIC_ENV"
+  else
+    cp "$FABRIC_ENV" "$tmp"
+    echo "${key}=${value}" >> "$tmp"
+    mv "$tmp" "$FABRIC_ENV"
+  fi
+}
+
+# ── Step 3: Validate connectivity ─────────────────────────────────────────────
+validate_endpoint() {
+  _heading "Validate endpoint connectivity"
+
+  # Re-source .env to pick up new values
+  # shellcheck source=/dev/null
+  set -a; source "$FABRIC_ENV"; set +a
+
+  local api_key="${LITELLM_API_KEY:-}"
+  if [[ -z "$api_key" ]]; then
+    die "No API key found in env. Cannot validate."
+  fi
+
+  _info "Testing connection to ${ENDPOINT_URL}/models ..."
+  local response
+  response="$(curl -s -w "\n%{http_code}" \
+    -H "Authorization: Bearer ${api_key}" \
+    "${ENDPOINT_URL}/models" 2>&1)" || true
+
+  local http_code
+  http_code="$(echo "$response" | tail -1)"
+  local body
+  body="$(echo "$response" | sed '$d')"
+
+  case "$http_code" in
+    200)
+      _ok "Connection successful! (${http_code})"
+      local model_count
+      model_count="$(echo "$body" | grep -c '"id"' || echo "?")"
+      _info "Models available: ${model_count}"
+      ;;
+    401)
+      die "Authentication failed (401). Check your API key."
+      ;;
+    *)
+      _warn "Unexpected response (HTTP ${http_code})"
+      _info "Response: ${body:0:200}"
+      ;;
+  esac
+}
+
+# ── Step 4: Optional default ──────────────────────────────────────────────────
+ask_default() {
+  _heading "Optional: Set as default vendor"
+
+  _info "Current default: ${BOLD}$(grep '^DEFAULT_VENDOR=' "$FABRIC_ENV" | cut -d= -f2 || echo "not set")${RESET}"
+  read -rp "Make ${VENDOR} (Modelos) the default vendor? [y/N] " -n 1
+  echo
+  if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
+    update_env_value "DEFAULT_VENDOR" "$VENDOR"
+    _ok "Default vendor set to ${VENDOR}"
+
+    # List models and ask which to set as default
+    local fab
+    fab="$(detect_fabric)"
+    if [[ -n "$fab" ]]; then
+      _info "Available models on Modelos endpoint:"
+      # shellcheck source=/dev/null
+      set -a; source "$FABRIC_ENV"; set +a
+      local models
+      models="$(curl -s -H "Authorization: Bearer ${LITELLM_API_KEY:-}" "${ENDPOINT_URL}/models" 2>/dev/null \
+        | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || true)"
+      if [[ -n "$models" ]]; then
+        echo "$models" | nl -w3 -s'] '
+        echo
+        read -rp "Enter model name to set as default (or press Enter to skip): " model_choice
+        if [[ -n "$model_choice" ]]; then
+          update_env_value "DEFAULT_MODEL" "$model_choice"
+          _ok "Default model set to ${model_choice}"
+        fi
+      else
+        _warn "Could not list models. You can set DEFAULT_MODEL manually later."
+      fi
+    fi
+  fi
+}
+
+# ── Check mode ────────────────────────────────────────────────────────────────
+check_status() {
+  _heading "Modelos endpoint status"
+
+  local fab
+  fab="$(detect_fabric)"
+  [[ -n "$fab" ]] && _ok "fabric binary: $fab ($($fab --version 2>&1))" || _err "fabric not found"
+
+  if [[ -f "$FABRIC_ENV" ]]; then
+    _ok "Config: $FABRIC_ENV"
+
+    local url key
+    url="$(grep -E "^${ENV_BASE_URL_KEY}=" "$FABRIC_ENV" 2>/dev/null | cut -d= -f2- || true)"
+    key="$(grep -E "^${ENV_API_KEY_KEY}=" "$FABRIC_ENV" 2>/dev/null | cut -d= -f2- || true)"
+
+    if [[ -n "$url" ]]; then
+      _ok "Endpoint: ${url}"
+    else
+      _err "No endpoint URL configured (${ENV_BASE_URL_KEY})"
+    fi
+
+    if [[ -n "$key" ]]; then
+      _ok "API key: ${key:0:8}...${key: -4}"
+    else
+      _err "No API key configured (${ENV_API_KEY_KEY})"
+    fi
+
+    local default_vendor
+    default_vendor="$(grep '^DEFAULT_VENDOR=' "$FABRIC_ENV" 2>/dev/null | cut -d= -f2 || true)"
+    if [[ "$default_vendor" == "$VENDOR" ]]; then
+      _ok "Default vendor: ${VENDOR}"
+    else
+      _info "Default vendor: ${default_vendor:-not set} (Modelos is available but not default)"
+    fi
+  else
+    _err "No .env file found at $FABRIC_ENV"
+    _info "Run: ${SCRIPT_NAME} (without flags) to set up"
+  fi
+
+  # Quick connectivity test
+  if [[ -n "${key:-}" ]]; then
+    _info "Testing endpoint ..."
+    local code
+    code="$(curl -s -o /dev/null -w "%{http_code}" \
+      -H "Authorization: Bearer ${key}" \
+      "${ENDPOINT_URL}/models" 2>/dev/null || echo "000")"
+    if [[ "$code" == "200" ]]; then
+      _ok "Endpoint reachable (HTTP 200)"
+    elif [[ "$code" == "401" ]]; then
+      _err "Endpoint rejected API key (HTTP 401)"
+    else
+      _warn "Endpoint returned HTTP ${code}"
+    fi
+  fi
+}
+
+# ── List models mode ──────────────────────────────────────────────────────────
+list_models() {
+  # shellcheck source=/dev/null
+  [[ -f "$FABRIC_ENV" ]] && { set -a; source "$FABRIC_ENV"; set +a; }
+
+  local api_key="${LITELLM_API_KEY:-}"
+  if [[ -z "$api_key" ]]; then
+    die "No API key set. Run: ${SCRIPT_NAME} first."
+  fi
+
+  _info "Fetching models from ${ENDPOINT_URL} ..."
+  local response
+  response="$(curl -s -H "Authorization: Bearer ${api_key}" "${ENDPOINT_URL}/models" 2>&1)" || true
+
+  if echo "$response" | grep -q '"error"'; then
+    _err "Error from endpoint:"
+    echo "$response" | head -5
+    exit 1
+  fi
+
+  local models
+  models="$(echo "$response" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || true)"
+  if [[ -z "$models" ]]; then
+    _warn "No models found or could not parse response"
+    echo "$response" | head -20
+    exit 1
+  fi
+
+  _heading "Available models on Lusófona Modelos"
+  echo "$models" | nl -w3 -s'] '
+  echo
+  _info "Usage: ${BOLD}fabric-ai -V ${VENDOR} -m <model-name> \"your prompt\"${RESET}"
+}
+
+# ── Usage ─────────────────────────────────────────────────────────────────────
+usage() {
+  cat <<EOF
+${BOLD}${SCRIPT_NAME}${RESET} — Configure fabric-ai for Lusófona Modelos LiteLLM endpoint
+
+${BOLD}USAGE${RESET}
+  ${SCRIPT_NAME}                Interactive setup (prompts for API key)
+  ${SCRIPT_NAME} --check        Verify current configuration status
+  ${SCRIPT_NAME} --list-models  List available models on the endpoint
+  ${SCRIPT_NAME} --help         Show this help
+
+${BOLD}WHAT IT DOES${RESET}
+  Adds Lusófona Modelos as a vendor in fabric-ai by setting:
+    ${ENV_BASE_URL_KEY}=${ENDPOINT_URL}
+    ${ENV_API_KEY_KEY}=<your-key>
+
+${BOLD}AFTER SETUP${RESET}
+  List models:    fabric-ai -V ${VENDOR} -L
+  Use a model:    fabric-ai -V ${VENDOR} -m <model> "your prompt"
+  Set default:    fabric-ai -d -V ${VENDOR} -m <model>
+EOF
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+main() {
+  case "${1:-}" in
+    --check|-c)
+      check_status
+      ;;
+    --list-models|-l)
+      list_models
+      ;;
+    --help|-h)
+      usage
+      ;;
+    "")
+      check_prerequisites
+      configure_env
+      validate_endpoint
+      ask_default
+      _heading "Setup complete!"
+      _info "List models:    ${BOLD}fabric-ai -V ${VENDOR} -L${RESET}"
+      _info "Use a model:    ${BOLD}fabric-ai -V ${VENDOR} -m <model> \"prompt\"${RESET}"
+      ;;
+    *)
+      _err "Unknown option: $1"
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

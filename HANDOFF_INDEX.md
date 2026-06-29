@@ -1,66 +1,68 @@
 # .myscripts/ — Master Handoff Index
 
-**For**: Any future agent session. Load this file first, then jump to the relevant project handoff.
-**Updated**: 2026-05-30
+**For**: Any future agent session. Load this for project → handoff-file mapping.
+**Updated**: 2026-06-29
+**Counts**: DEFER to `MASTER_TODO.md` — it is the single source of truth. This file intentionally carries no task counts to avoid drift.
 
 ---
 
-## Quick Reference — Which File to Load
+## Where to look
 
-| If You Want To... | Load This File |
+| If you want to... | Load this file |
 |-------------------|---------------|
-| Extract ytobs from .myscripts to hub/ | `youtube-obsidian/HANDOFF_ytobs_extraction.md` |
-| See full audit of ALL projects | `MYSCRIPTS_AUDIT_AND_EXTRACTION_PLAN.md` |
-| Extract fabric-graph-agents | (not yet written — run audit doc first) |
-| Extract circuit-board-knowledge-extractor | (not yet written) |
-| Build reddit-obsidian from scratch (greenfield) | (not yet written — see Table 2 in audit doc) |
-| Build obsidian-polish into full app (greenfield) | (not yet written) |
-| Build or-bench into full app | (not yet written) |
+| See real progress + campaign state | `MASTER_TODO.md` (read the "⚠️ CAMPAIGN STATE" header) |
+| See open human decisions before acting | `HUMAN.md` |
+| See the full audit of ALL projects | `MYSCRIPTS_AUDIT_AND_EXTRACTION_PLAN.md` |
+| Work on a specific hub/ project | its handoff in `archive/` (table below) |
 
 ---
 
-## Handoff Files Created So Far
+## Project → Handoff Mapping
 
-| File | Project | Status |
-|------|---------|--------|
-| `MYSCRIPTS_AUDIT_AND_EXTRACTION_PLAN.md` | All of .myscripts | ✅ Complete |
-| `youtube-obsidian/HANDOFF_ytobs_extraction.md` | ytobs extraction (29 items) | ✅ Complete |
+### ✅ Completed Extractions (Phase 1 — ALL DONE)
 
----
+| Project | Extracted To | Handoff Location |
+|---------|-------------|-----------------|
+| ytobs (youtube-obsidian) | `hub/ytobs/` | `hub/ytobs/archive/HANDOFF_extraction.md` |
+| fabric-graph-agents | `hub/fabric-graph-agents/` | `hub/fabric-graph-agents/archive/HANDOFF_extraction.md` |
+| circuit-board-extractor | `hub/circuit-extractor/` | `hub/circuit-extractor/archive/HANDOFF_extraction.md` |
+| fabric-image-analysis | `hub/fabric-image-analysis/` | `hub/fabric-image-analysis/archive/HANDOFF_extraction.md` |
+| jumpserver-deploy | `hub/jumpserver-deploy/` | `hub/jumpserver-deploy/archive/HANDOFF_extraction.md` |
+| portable-tmux | `hub/portable-tmux/` | `hub/portable-tmux/archive/HANDOFF_extraction.md` |
 
-## Projects Still Needing Handoff Files
+### ✅ Completed Greenfields (Phase 2 — ALL DONE)
 
-Based on the extraction plan, these are the next files to create:
+| Project | Location | Spec / Context |
+|---------|----------|----------------|
+| reddit-obsidian (G1) | `hub/reddit-obsidian/` | `GREENFIELDS/reddit_obsidian_spec.md` + `hub/reddit-obsidian/CONTEXT.md` |
+| obsidian-polish (G2) | `hub/obsidian-polish/` | `GREENFIELDS/obsidian_polish_spec.md` + `hub/obsidian-polish/CONTEXT.md` |
+| or-bench (G3) | `hub/or-bench/` | `GREENFIELDS/or_bench_spec.md` |
 
-### Extraction Projects (existing full apps moving to hub/)
+### ⬜ Deferred (low priority)
 
-1. **`fabric-graph-agents/HANDOFF_extraction.md`** — migration spec for the 45+ file fabric orchestration system
-2. **`circuit-board-knowledge-extractor/HANDOFF_extraction.md`** — migration spec for the OCR system
-3. **`fabric-image-analysis/HANDOFF_extraction.md`** — migration spec for image metadata pipeline
-4. **`dockerfiles/jumpserver-deploy/HANDOFF_extraction.md`** — migration spec for JumpServer deployment
+| Project | Notes |
+|---------|-------|
+| tokcount (G4) | Works fine as script |
+| slugfile (G5) | Works fine as script |
+| mfab (G6) | Works fine as script |
 
-### Greenfield Projects (scripts → full apps)
+### ⬜ Phase 4: Stabilization (deferred to human)
 
-5. **`GREENFIELD_reddit_obsidian_spec.md`** — build spec for the reddit extractor app
-6. **`GREENFIELD_obsidian_polish_spec.md`** — build spec for modularizing obsidian-polish
-7. **`GREENFIELD_or_bench_spec.md`** — build spec for packaging or-bench
+See `HUMAN.md` and `MASTER_TODO.md` § Phase 4 (S1–S6). Not started.
 
 ---
 
 ## Session Commands
 
-To start work on any project, tell the agent:
+To start any work, tell the agent:
 
 ```
-Load the handoff at: ~/projetos/hub/.myscripts/<path>/HANDOFF_*.md
-Execute the checklist from Phase 1 through completion.
+Load: ~/projetos/hub/.myscripts/MASTER_TODO.md
 ```
 
-Example for ytobs:
-
+For stabilization decisions:
 ```
-Load the handoff at: ~/projetos/hub/.myscripts/youtube-obsidian/HANDOFF_ytobs_extraction.md
-Execute the checklist from Phase 1 through Phase 6. Do not skip items.
+Load: ~/projetos/hub/.myscripts/HUMAN.md
 ```
 
 ---
@@ -68,7 +70,6 @@ Execute the checklist from Phase 1 through Phase 6. Do not skip items.
 ## Post-Completion
 
 After each project is extracted/built:
-
-1. Mark it ✅ in `MYSCRIPTS_AUDIT_AND_EXTRACTION_PLAN.md`
-2. Move the handoff file to the new project's `archive/` directory
-3. Update this index
+1. Mark it ✅ in `MASTER_TODO.md` (the source of truth)
+2. Archive the handoff in the new project's `archive/` directory
+3. Do NOT duplicate counts in this file
