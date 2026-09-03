@@ -42,11 +42,9 @@ export PATH=$PATH:/home/$USER/.myscripts
 - **`heic2jpg.sh`** - Bulk convert HEIC images to JPG (ImageMagick/heif-convert)
   - Quick ref: `docs/heic2jpg-quickref.md`
 
-## Skills
+## Scratchpad
 
-The `skills/` folder contains resumption guides for multi-session projects. These help AI agents pick up where previous sessions left off.
-
-- **`heic2jpg-resume.md`** - Resume/maintain heic2jpg.sh
+Session scratch (handoffs, resume guides, session prompts) lives in `temp/` (local-only, gitignored via `.git/info/exclude`). Agents: see `AGENTS.md` for the scratchpad rule.
 
 ## Obsidian Integration (Optional)
 

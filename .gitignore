@@ -7,8 +7,10 @@ prompts/
 *.backup-*
 obsidian-polish.backup-*
 
-# Agent placeholder files (not ready for repo)
-AGENTS.md
+# Real secrets never tracked (mfab.env is the committed template)
+.env
+.env.local
+*.local.md
 
 # Python virtual environments
 **/venv/

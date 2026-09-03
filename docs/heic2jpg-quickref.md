@@ -40,7 +40,7 @@ heic2jpg.sh ~/test-heic2jpg/images
 | File | Path | Purpose |
 |------|------|---------|
 | **Masterplan** | `~/.myscripts/docs/plans/HEIC2JPG_MASTERPLAN.md` | Complete project spec |
-| **Resume Skill** | `~/.myscripts/skills/heic2jpg-resume.md` | Session resumption guide |
+| **Resume Skill** | `temp/heic2jpg-resume.md` (local scratch, untracked) | Session resumption guide |
 | **Script** | `~/.myscripts/heic2jpg.sh` | Main script (to be created) |
 | **Reference** | `~/.myscripts/flac2mp3.sh` | Pattern to follow |
 | **Quick Ref** | `~/.myscripts/docs/heic2jpg-quickref.md` | This file |

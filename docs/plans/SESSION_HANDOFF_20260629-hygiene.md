@@ -1,7 +1,7 @@
 ---
 created: 2026-06-29
 session_type: analysis + handoff
-status: pending user decision
+status: adopted 2026-09-03 (implemented per Section 6)
 related: prompt_2026-06-29_0157_stabilization-ops.md, MASTER_TODO.md, HUMAN.md
 ---
 
@@ -169,7 +169,7 @@ All reversible, all as a single hygiene commit:
 |---|---|
 | Master tracker | `.myscripts/MASTER_TODO.md` (campaign state header + Phase 4 table) |
 | Decision record | `.myscripts/HUMAN.md` (D1–D5, resolved 2026-06-29) |
-| Phase 4 runbook | `.myscripts/prompt_2026-06-29_0157_stabilization-ops.md` |
+| Phase 4 runbook | `.myscripts/temp/prompt_2026-06-29_0157_stabilization-ops.md` (local scratch) |
 | This handoff | `.myscripts/docs/plans/SESSION_HANDOFF_20260629-hygiene.md` |
 | Unversioned-projects note | `~/Documents/obsidian_vault/projects/hub-unversioned-shell-projects.md` |
 | The proposed scheme (visual) | Section 5 above |

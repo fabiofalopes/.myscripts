@@ -16,7 +16,7 @@ The extraction + greenfield campaign (P0–P2, E1–E6, G1–G3) is **functional
 | **G-SRC** | Greenfield source scripts were **not deleted** (2,237 lines). | Duplicate/divergent logic. | ✅ **Resolved** — all 5 deleted in commit `273c783` (D2). Recoverable via snapshot `8091cce`. |
 | **G-DRIFT** | Tracking files had drifted (reconciled 2026-06-29). | Resolved in prior pass. | ✅ **Done** |
 
-**Remaining**: S6 (stale doc refs, C4) is **deferred** per D5 — low severity, paths still resolve. G3.7 (or-bench live test) needs an API key. G4–G6 (low-priority greenfields) work fine as scripts. See `HUMAN.md` for the decision record and `prompt_2026-06-29_0157_stabilization-ops.md` for the runbook.
+**Remaining**: S6 (stale doc refs, C4) is **deferred** per D5 — low severity, paths still resolve. G3.7 (or-bench live test) needs an API key. G4–G6 (low-priority greenfields) work fine as scripts. See `HUMAN.md` for the decision record and `temp/prompt_2026-06-29_0157_stabilization-ops.md` for the runbook.
 
 ---
 

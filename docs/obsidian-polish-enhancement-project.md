@@ -374,7 +374,7 @@ echo "Draft content" > draft.md
    - Category naming examples
    - Enrichment patterns guide
 
-2. **`docs/obsidian-polish-session-handoff-2025-12-19.md`**
+2. **`temp/archive/obsidian-polish-session-handoff-2025-12-19.md`**
    - Mark as superseded
    - Link to this master plan
    - Note what was implemented
@@ -420,7 +420,7 @@ You can start fresh in any session with just:
 **Cache Location**: `~/.cache/obsidian-polish/` (created in Sprint 2)
 
 **Previous Work**:
-- Session handoff doc: `docs/obsidian-polish-session-handoff-2025-12-19.md`
+- Session handoff doc: `temp/archive/obsidian-polish-session-handoff-2025-12-19.md`
 - Existing documentation: `docs/obsidian-polish.md`
 
 ---
