@@ -24,7 +24,7 @@ This document maps how configurations across multiple repositories and system lo
 └── docs/                               [OpenCode documentation]
 
 ~/.config/ocmonitor/                    [Deployed config - NOT version controlled]
-└── config.toml                         [Symlink → ~/.myscripts/tmux/configs/ocmonitor.config.toml]
+└── config.toml                         [Symlink → ~/projetos/hub/portable-tmux/configs/ocmonitor.config.toml]
 
 ~/.local/share/opencode/                [OpenCode runtime data - NOT version controlled]
 ├── storage/
@@ -36,9 +36,9 @@ This document maps how configurations across multiple repositories and system lo
 
 ### 1. Configuration Deployment
 ```
-Edit: ~/.myscripts/tmux/configs/ocmonitor.config.toml
+Edit: ~/projetos/hub/portable-tmux/configs/ocmonitor.config.toml
   ↓
-Run: ~/.myscripts/tmux/scripts/deploy-ocmonitor-config.sh
+Run: ~/projetos/hub/portable-tmux/scripts/deploy-ocmonitor-config.sh
   ↓
 Symlink created: ~/.config/ocmonitor/config.toml → source config
   ↓
@@ -71,9 +71,9 @@ User monitors: Live log stream in dedicated window
 
 | Config File | Owner | Purpose | Version Control |
 |-------------|-------|---------|-----------------|
-| `~/.myscripts/tmux/configs/ocmonitor.config.toml` | myscripts repo | ocmonitor source of truth | ✓ Git tracked |
-| `~/.myscripts/tmux/scripts/start-opencode-observability-monitoring.sh` | myscripts repo | Session launcher | ✓ Git tracked |
-| `~/.myscripts/tmux/tmux/tmux.conf` | myscripts repo | tmux base config + persistence | ✓ Git tracked |
+| `~/projetos/hub/portable-tmux/configs/ocmonitor.config.toml` | myscripts repo | ocmonitor source of truth | ✓ Git tracked |
+| `~/projetos/hub/portable-tmux/scripts/start-opencode-observability-monitoring.sh` | myscripts repo | Session launcher | ✓ Git tracked |
+| `~/projetos/hub/portable-tmux/tmux/tmux.conf` | myscripts repo | tmux base config + persistence | ✓ Git tracked |
 | `~/.config/opencode/opencode.json` | opencode config repo | OpenCode agent config | ✓ Git tracked (separate repo) |
 | `~/.config/ocmonitor/config.toml` | Symlink (myscripts) | Runtime config for ocmonitor | ✗ Symlink to tracked file |
 | `~/.local/share/opencode/storage/session/` | OpenCode runtime | Session data | ✗ Runtime data only |
@@ -83,7 +83,7 @@ User monitors: Live log stream in dedicated window
 
 ### myscripts → OpenCode Runtime
 - **Dependency:** ocmonitor config points to OpenCode session storage path
-- **Failure mode:** If path changes, update `~/.myscripts/tmux/configs/ocmonitor.config.toml` and redeploy
+- **Failure mode:** If path changes, update `~/projetos/hub/portable-tmux/configs/ocmonitor.config.toml` and redeploy
 - **Test:** `ocmonitor sessions` should show sessions
 
 ### myscripts → ocmonitor installation
@@ -123,7 +123,7 @@ User monitors: Live log stream in dedicated window
 1. **Clone myscripts repo:**
    ```bash
    git clone <repo> ~/.myscripts
-   cd ~/.myscripts/tmux
+   cd ~/projetos/hub/portable-tmux
    ```
 
 2. **Deploy tmux configuration:**
@@ -168,14 +168,14 @@ User monitors: Live log stream in dedicated window
 ls -la ~/.config/ocmonitor/config.toml
 
 # Verify sessions path
-grep sessions_path ~/.myscripts/tmux/configs/ocmonitor.config.toml
+grep sessions_path ~/projetos/hub/portable-tmux/configs/ocmonitor.config.toml
 
 # Verify sessions exist
 ls ~/.local/share/opencode/storage/session/
 ```
 
 **Fix:**
-Redeploy config: `bash ~/.myscripts/tmux/scripts/deploy-ocmonitor-config.sh`
+Redeploy config: `bash ~/projetos/hub/portable-tmux/scripts/deploy-ocmonitor-config.sh`
 
 ### Issue: Session launcher fails
 **Check:**

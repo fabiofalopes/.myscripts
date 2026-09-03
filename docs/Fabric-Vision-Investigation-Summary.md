@@ -49,7 +49,7 @@ I've created a third pattern based on your requirements:
    - Purpose: Comprehensive image analysis with structured JSON output
    - Ideal for: Programmatic processing, data extraction, asset management
    - Output: Valid JSON with multiple fields (objects, text, technical details, metadata, etc.)
-   - Location: `~/.myscripts/fabric-custom-patterns/analyze-image-json/system.md`
+   - Location: `~/projetos/hub/.myscripts/fabric-custom-patterns/analyze-image-json/system.md`
 
 ---
 
@@ -130,7 +130,7 @@ fabric -a test_image.jpg -p image-text-extraction
 ## Tools & Scripts Created
 
 ### 1. Comprehensive Guide
-**File**: `~/.myscripts/docs/Fabric-Vision-Models-Guide.md`  
+**File**: `~/projetos/hub/.myscripts/docs/Fabric-Vision-Models-Guide.md`  
 **Contents**:
 - Complete usage instructions
 - Model recommendations
@@ -153,7 +153,7 @@ fabric -a test_image.jpg -p image-text-extraction
 ```
 
 ### 4. Quick Reference
-**File**: `~/.myscripts/docs/Fabric-Vision-Quick-Reference.md`  
+**File**: `~/projetos/hub/.myscripts/docs/Fabric-Vision-Quick-Reference.md`  
 **Purpose**: One-page command reference
 
 ---
@@ -239,11 +239,11 @@ fabric -a <image> -p <pattern> -m <vision-model> [options]
 
 ## Resources
 
-- **Main Guide**: `~/.myscripts/docs/Fabric-Vision-Models-Guide.md`
-- **Quick Reference**: `~/.myscripts/docs/Fabric-Vision-Quick-Reference.md`
+- **Main Guide**: `~/projetos/hub/.myscripts/docs/Fabric-Vision-Models-Guide.md`
+- **Quick Reference**: `~/projetos/hub/.myscripts/docs/Fabric-Vision-Quick-Reference.md`
 - **Test Script**: `~/.myscripts/test-fabric-vision.sh`
 - **Examples**: `~/.myscripts/fabric-vision-examples.sh`
-- **Your Patterns**: `~/.myscripts/fabric-custom-patterns/`
+- **Your Patterns**: `~/projetos/hub/.myscripts/fabric-custom-patterns/`
 - **Fabric GitHub**: https://github.com/danielmiessler/fabric
 
 ---

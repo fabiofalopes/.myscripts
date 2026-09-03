@@ -8,7 +8,7 @@
 ## 🔍 Existing System: fabric-image-analysis
 
 ### Location
-`~/.myscripts/fabric-image-analysis/`
+`~/projetos/hub/fabric-image-analysis/`
 
 ### Status
 ✅ Production-ready (Phase 1 complete, Phase 2 in development)
@@ -131,7 +131,7 @@ SESSION_NAME="pipeline-YYYYMMDD-HHMMSS"
 ## 📦 Fabric Custom Patterns
 
 ### Location
-`~/.myscripts/fabric-custom-patterns/`
+`~/projetos/hub/.myscripts/fabric-custom-patterns/`
 
 ### OCR-Related Patterns (Existing)
 

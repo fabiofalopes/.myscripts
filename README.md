@@ -53,7 +53,7 @@ To edit patterns in Obsidian while keeping them tracked here:
 ```bash
 # From your Obsidian vault
 cd ~/Documents/Obsidian_Vault_01/Vault_01/
-ln -s ~/.myscripts/fabric-custom-patterns fabric-custom-patterns
+ln -s ~/projetos/hub/.myscripts/fabric-custom-patterns fabric-custom-patterns
 ```
 
 This creates a symlink FROM Obsidian TO this repo, allowing you to:
@@ -67,7 +67,7 @@ To use these custom patterns with fabric:
 
 ```bash
 # Link from fabric's patterns directory to this repo
-ln -s ~/.myscripts/fabric-custom-patterns ~/.config/fabric/patterns/custom
+ln -s ~/projetos/hub/.myscripts/fabric-custom-patterns ~/.config/fabric/patterns/custom
 ```
 
 See `NOTES.md` for detailed workflow documentation.

@@ -36,7 +36,7 @@ Comprehensive guide covering:
 - Best practices
 - Troubleshooting
 
-**Read it**: `cat ~/.myscripts/docs/Fabric-Vision-Models-Guide.md`
+**Read it**: `cat ~/projetos/hub/.myscripts/docs/Fabric-Vision-Models-Guide.md`
 
 ---
 
@@ -49,7 +49,7 @@ One-page command reference with:
 - Troubleshooting table
 - Tips and best practices
 
-**Read it**: `cat ~/.myscripts/docs/Fabric-Vision-Quick-Reference.md`
+**Read it**: `cat ~/projetos/hub/.myscripts/docs/Fabric-Vision-Quick-Reference.md`
 
 ---
 
@@ -62,7 +62,7 @@ Detailed findings from the investigation:
 - Recommended next steps
 - Example workflows
 
-**Read it**: `cat ~/.myscripts/docs/Fabric-Vision-Investigation-Summary.md`
+**Read it**: `cat ~/projetos/hub/.myscripts/docs/Fabric-Vision-Investigation-Summary.md`
 
 ---
 
@@ -119,7 +119,7 @@ Beautiful formatted summary of everything created and configured.
 ## 🎨 Custom Vision Patterns
 
 ### Location
-All patterns are in: `~/.myscripts/fabric-custom-patterns/`
+All patterns are in: `~/projetos/hub/.myscripts/fabric-custom-patterns/`
 
 Also documented in: `fabric-custom-patterns/README.md`
 
@@ -339,10 +339,10 @@ fabric -d       # Set default vision model
 ## 📂 File Locations
 
 ### Documentation
-- `~/.myscripts/docs/Fabric-Vision-Models-Guide.md`
-- `~/.myscripts/docs/Fabric-Vision-Quick-Reference.md`
-- `~/.myscripts/docs/Fabric-Vision-Investigation-Summary.md`
-- `~/.myscripts/docs/Fabric-Vision-Index.md` (this file)
+- `~/projetos/hub/.myscripts/docs/Fabric-Vision-Models-Guide.md`
+- `~/projetos/hub/.myscripts/docs/Fabric-Vision-Quick-Reference.md`
+- `~/projetos/hub/.myscripts/docs/Fabric-Vision-Investigation-Summary.md`
+- `~/projetos/hub/.myscripts/docs/Fabric-Vision-Index.md` (this file)
 
 ### Scripts
 - `~/.myscripts/test-fabric-vision.sh`
@@ -350,10 +350,10 @@ fabric -d       # Set default vision model
 - `~/.myscripts/fabric-vision-summary.sh`
 
 ### Patterns
-- `~/.myscripts/fabric-custom-patterns/image-text-extraction/`
-- `~/.myscripts/fabric-custom-patterns/expert-ocr-engine/`
-- `~/.myscripts/fabric-custom-patterns/analyze-image-json/`
-- `~/.myscripts/fabric-custom-patterns/README.md` (updated)
+- `~/projetos/hub/.myscripts/fabric-custom-patterns/image-text-extraction/`
+- `~/projetos/hub/.myscripts/fabric-custom-patterns/expert-ocr-engine/`
+- `~/projetos/hub/.myscripts/fabric-custom-patterns/analyze-image-json/`
+- `~/projetos/hub/.myscripts/fabric-custom-patterns/README.md` (updated)
 
 ### Fabric Config
 - `~/.config/fabric/.env` (API keys)

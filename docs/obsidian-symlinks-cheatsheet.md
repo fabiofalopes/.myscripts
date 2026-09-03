@@ -45,7 +45,7 @@ ls -la "$OBSVAULT/_linked"
 Use an upstream “Hot Reload” plugin to reload Obsidian when watched paths change.
 
 Reference note (context + options):
-- `~/.myscripts/docs/obsidian-symlinks-and-hot-reload.md`
+- `~/projetos/hub/.myscripts/docs/obsidian-symlinks-and-hot-reload.md`
 
 ## Optional: tiny convenience alias (not a tool)
 

@@ -107,7 +107,7 @@ mv docs/Documentation-Strategy-Framework.md fabric/docs/
 ### Step 5: Update Fabric Config
 ```bash
 # Link patterns directory to fabric config
-ln -s ~/.myscripts/fabric/patterns ~/.config/fabric/patterns-custom
+ln -s ~/.config/fabric/patterns ~/.config/fabric/patterns-custom
 ```
 
 ### Step 6: Create README files
@@ -123,12 +123,12 @@ ln -s ~/.myscripts/fabric/patterns ~/.config/fabric/patterns-custom
 Fabric needs to find custom patterns. Add to `~/.config/fabric/.env`:
 ```bash
 # Custom patterns location
-FABRIC_PATTERNS_USER_DIR=~/.myscripts/fabric/patterns
+FABRIC_PATTERNS_USER_DIR=~/.config/fabric/patterns
 ```
 
 Or create symlink:
 ```bash
-ln -s ~/.myscripts/fabric/patterns ~/.config/fabric/patterns/custom
+ln -s ~/.config/fabric/patterns ~/.config/fabric/patterns/custom
 ```
 
 ### Script Path Updates
@@ -181,7 +181,7 @@ ls ~/.myscripts/fabric/docs/
 
 ### To work with patterns:
 ```bash
-cd ~/.myscripts/fabric/patterns
+cd ~/.config/fabric/patterns
 ls
 fabric -a image.jpg -p ultra-ocr-engine
 ```

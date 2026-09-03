@@ -56,7 +56,7 @@ plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
 **For standalone zsh**, add to end of `~/.zshrc`:
 ```bash
 # Source the snippet from this repo
-source ~/.myscripts/shell-enhancement/config/.zshrc.snippet
+source ~/projetos/hub/.myscripts/shell-enhancement/config/.zshrc.snippet
 ```
 
 ### 3. Restart Shell

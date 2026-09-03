@@ -39,7 +39,7 @@ This workspace is an **incubator** for CLI tools and Fabric AI patterns. Mature 
 ### fabric-custom-patterns/
 **The source of truth for custom fabric patterns used by scripts in this repo.**
 
-- **Location**: `~/.myscripts/fabric-custom-patterns/`
+- **Location**: `~/projetos/hub/.myscripts/fabric-custom-patterns/`
 - **Purpose**: Contains the actual pattern definitions that scripts depend on
 - **Tracked in Git**: ✅ YES - patterns are versioned with the scripts that use them
 - **Why tracked**: Scripts like `mfab` depend on specific patterns. Without the patterns, the scripts are useless.
@@ -51,7 +51,7 @@ For comfortable editing of patterns in Obsidian:
 ```bash
 # From your Obsidian vault, create a symlink TO this repo
 cd ~/Documents/Obsidian_Vault_01/Vault_01/
-ln -s ~/.myscripts/fabric-custom-patterns fabric-custom-patterns
+ln -s ~/projetos/hub/.myscripts/fabric-custom-patterns fabric-custom-patterns
 ```
 
 **Important**: The symlink goes FROM Obsidian TO this repo, not the other way around.
@@ -60,7 +60,7 @@ ln -s ~/.myscripts/fabric-custom-patterns fabric-custom-patterns
 
 ```bash
 # Link from fabric's custom patterns directory
-ln -s ~/.myscripts/fabric-custom-patterns ~/.config/fabric/patterns/custom
+ln -s ~/projetos/hub/.myscripts/fabric-custom-patterns ~/.config/fabric/patterns/custom
 ```
 
 ## mfab — Main Project

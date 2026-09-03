@@ -113,8 +113,8 @@ yta -f opus -o ~/yt-audio/dwarkesh \
 
 | File | Path | Purpose |
 |------|------|---------|
-| **Script** | `~/.myscripts/yta` | Main executable |
-| **Quick Ref** | `~/.myscripts/docs/yta-quickref.md` | This file |
+| **Script** | `~/projetos/hub/.myscripts/yta` | Main executable |
+| **Quick Ref** | `~/projetos/hub/.myscripts/docs/yta-quickref.md` | This file |
 | **Default output** | `~/yt-audio/` | Downloaded audio |
 | **Fabric env** | `~/.config/fabric/.env` | Provider API keys (managed by `fabric-ai --setup`) |
 

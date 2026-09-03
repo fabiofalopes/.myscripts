@@ -451,6 +451,6 @@ fswatch -0 "$OBSVAULT/inbox" | xargs -0 -n1 -I{} obsidian-polish {} -r -y
 
 ---
 
-**Location**: `~/.myscripts/obsidian-polish`  
-**Documentation**: `~/.myscripts/docs/obsidian-polish.md`  
+**Location**: `~/projetos/hub/obsidian-polish`  
+**Documentation**: `~/projetos/hub/.myscripts/docs/obsidian-polish.md`  
 **Patterns**: `~/.config/fabric/patterns/obsidian_*`

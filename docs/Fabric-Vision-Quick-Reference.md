@@ -118,10 +118,10 @@ done
 
 ## Files & Locations
 
-- **Guide**: `~/.myscripts/docs/Fabric-Vision-Models-Guide.md`
+- **Guide**: `~/projetos/hub/.myscripts/docs/Fabric-Vision-Models-Guide.md`
 - **Test Script**: `~/.myscripts/test-fabric-vision.sh`
 - **Examples**: `~/.myscripts/fabric-vision-examples.sh`
-- **Patterns**: `~/.myscripts/fabric-custom-patterns/`
+- **Patterns**: `~/projetos/hub/.myscripts/fabric-custom-patterns/`
 - **Config**: `~/.config/fabric/.env`
 
 ## Quick Test

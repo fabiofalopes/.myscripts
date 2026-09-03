@@ -167,10 +167,10 @@ slugfile -r ./folder/ --collision increment
 
 ## File: Location
 
-- **Script:** `~/.myscripts/slugfile`
-- **Backup:** `~/.myscripts/slugfile.backup-YYYYMMDD-HHMMSS`
-- **Docs:** `~/.myscripts/SLUGFILE_ENHANCED.md`
-- **Tests:** `~/.myscripts/test-slugfile.sh`
+- **Script:** `~/projetos/hub/.myscripts/slugfile`
+- **Backup:** `~/projetos/hub/.myscripts/slugfile.backup-YYYYMMDD-HHMMSS`
+- **Docs:** `~/projetos/hub/.myscripts/SLUGFILE_ENHANCED.md`
+- **Tests:** `~/projetos/hub/.myscripts/test-slugfile.sh`
 
 ---
 

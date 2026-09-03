@@ -19,7 +19,7 @@ This repo is the **incubator** for personal CLI tools and Fabric AI patterns. Ma
 - `to_note` / `clip.sh` / `concat*` — standalone utilities
 - `yta` — audio downloader (yt-dlp wrapper; opus stream-copy = smallest). Quick ref: `docs/yta-quickref.md`
 - `wav-to-mp3` — audio conversion utility
-- `docs/` — 30+ documentation files (31 have stale paths — see C4/S6 in MASTER_TODO)
+- `docs/` — 30+ documentation files (stale `~/.myscripts/` paths cleaned 2026-09-03, S6/C4 done)
 - `GREENFIELDS/` — build specs for greenfield projects (now implemented)
 
 ### What Was Extracted/Built to hub/ (campaign complete)

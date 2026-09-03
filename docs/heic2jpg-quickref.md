@@ -14,10 +14,10 @@
 Load skill: heic2jpg-resume
 
 # Check current status
-grep "^- \[ \]" ~/.myscripts/docs/plans/HEIC2JPG_MASTERPLAN.md | head -1
+grep "^- \[ \]" ~/projetos/hub/.myscripts/docs/plans/HEIC2JPG_MASTERPLAN.md | head -1
 
 # Read masterplan
-cat ~/.myscripts/docs/plans/HEIC2JPG_MASTERPLAN.md
+cat ~/projetos/hub/.myscripts/docs/plans/HEIC2JPG_MASTERPLAN.md
 ```
 
 ### Testing (once implemented)
@@ -39,11 +39,11 @@ heic2jpg.sh ~/test-heic2jpg/images
 
 | File | Path | Purpose |
 |------|------|---------|
-| **Masterplan** | `~/.myscripts/docs/plans/HEIC2JPG_MASTERPLAN.md` | Complete project spec |
+| **Masterplan** | `~/projetos/hub/.myscripts/docs/plans/HEIC2JPG_MASTERPLAN.md` | Complete project spec |
 | **Resume Skill** | `temp/heic2jpg-resume.md` (local scratch, untracked) | Session resumption guide |
-| **Script** | `~/.myscripts/heic2jpg.sh` | Main script (to be created) |
-| **Reference** | `~/.myscripts/flac2mp3.sh` | Pattern to follow |
-| **Quick Ref** | `~/.myscripts/docs/heic2jpg-quickref.md` | This file |
+| **Script** | `~/projetos/hub/.myscripts/heic2jpg.sh` | Main script (to be created) |
+| **Reference** | `~/projetos/hub/.myscripts/flac2mp3.sh` | Pattern to follow |
+| **Quick Ref** | `~/projetos/hub/.myscripts/docs/heic2jpg-quickref.md` | This file |
 
 ---
 

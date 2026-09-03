@@ -13,20 +13,20 @@ This workflow establishes a dedicated `tmux` environment for monitoring OpenCode
 
 ```bash
 # 1. Deploy ocmonitor configuration (one-time setup)
-~/.myscripts/tmux/scripts/deploy-ocmonitor-config.sh
+~/projetos/hub/portable-tmux/scripts/deploy-ocmonitor-config.sh
 
 # 2. Launch the monitoring dashboard
-~/.myscripts/tmux/scripts/start-opencode-observability-monitoring.sh
+~/projetos/hub/portable-tmux/scripts/start-opencode-observability-monitoring.sh
 ```
 
 ## Configuration
 
-**Source of Truth:** `~/.myscripts/tmux/configs/ocmonitor.config.toml`
+**Source of Truth:** `~/projetos/hub/portable-tmux/configs/ocmonitor.config.toml`
 **Deployed To:** `~/.config/ocmonitor/config.toml` (symlinked)
 
 To modify configuration:
-1. Edit: `~/.myscripts/tmux/configs/ocmonitor.config.toml`
-2. Redeploy: `~/.myscripts/tmux/scripts/deploy-ocmonitor-config.sh`
+1. Edit: `~/projetos/hub/portable-tmux/configs/ocmonitor.config.toml`
+2. Redeploy: `~/projetos/hub/portable-tmux/scripts/deploy-ocmonitor-config.sh`
 3. Restart monitoring session if needed
 
 **Key Settings:**
@@ -87,8 +87,8 @@ Ctrl-b + d    # Detach (session keeps running)
 
 ## Documentation Links
 
-- **Design Document:** `~/.myscripts/tmux/docs/OPENCODE-OBSERVABILITY-DESIGN.md`
-- **Cross-Repo Linkages:** `~/.myscripts/docs/CROSS-REPO-CONFIG-LINKAGES.md`
+- **Design Document:** `~/projetos/hub/portable-tmux/docs/OPENCODE-OBSERVABILITY-DESIGN.md`
+- **Cross-Repo Linkages:** `~/projetos/hub/.myscripts/docs/CROSS-REPO-CONFIG-LINKAGES.md`
 - **ocmonitor Source:** https://github.com/Shlomob/ocmonitor-share
 
 ## Troubleshooting
@@ -102,4 +102,4 @@ Ctrl-b + d    # Detach (session keeps running)
 **Issue:** Session doesn't persist after reboot
 **Fix:** Install tmux plugins: `Ctrl-b + I` inside tmux
 
-See `~/.myscripts/docs/CROSS-REPO-CONFIG-LINKAGES.md` for comprehensive troubleshooting.
+See `~/projetos/hub/.myscripts/docs/CROSS-REPO-CONFIG-LINKAGES.md` for comprehensive troubleshooting.

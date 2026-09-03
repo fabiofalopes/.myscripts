@@ -11,13 +11,13 @@
 ### Read First
 ```bash
 # Vision & architecture
-~/.myscripts/docs/plans/CIRCUIT_BOARD_VISION.md
+~/projetos/hub/.myscripts/docs/plans/CIRCUIT_BOARD_VISION.md
 
 # Detailed development plan
-~/.myscripts/docs/plans/CIRCUIT_BOARD_KNOWLEDGE_EXTRACTOR_MASTERPLAN.md
+~/projetos/hub/.myscripts/docs/plans/CIRCUIT_BOARD_KNOWLEDGE_EXTRACTOR_MASTERPLAN.md
 
 # Technical analysis
-~/.myscripts/docs/plans/TECHNICAL_ANALYSIS.md
+~/projetos/hub/.myscripts/docs/plans/TECHNICAL_ANALYSIS.md
 
 # Resume skill
 ~/.config/opencode/skills/circuit-board-extraction-resume.md
@@ -32,11 +32,11 @@
 ### Existing Infrastructure (Reuse)
 ```bash
 # Pass 1 pipeline (reuse as-is)
-~/.myscripts/fabric-image-analysis/workflows/image-metadata-pipeline.sh
+~/projetos/hub/fabric-image-analysis/workflows/image-metadata-pipeline.sh
 
 # OCR patterns
-~/.myscripts/fabric-custom-patterns/expert-ocr-engine/
-~/.myscripts/fabric-custom-patterns/analyze-image-json/
+~/projetos/hub/.myscripts/fabric-custom-patterns/expert-ocr-engine/
+~/projetos/hub/.myscripts/fabric-custom-patterns/analyze-image-json/
 ```
 
 ---

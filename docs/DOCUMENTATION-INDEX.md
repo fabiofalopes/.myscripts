@@ -49,13 +49,13 @@ Quick reference for finding documentation across the myscripts repository. This 
 ## 🔧 By Task
 
 ### "I want to start monitoring OpenCode"
-1. Deploy config: `~/.myscripts/tmux/scripts/deploy-ocmonitor-config.sh`
-2. Start dashboard: `~/.myscripts/tmux/scripts/start-opencode-observability-monitoring.sh`
+1. Deploy config: `~/projetos/hub/portable-tmux/scripts/deploy-ocmonitor-config.sh`
+2. Start dashboard: `~/projetos/hub/portable-tmux/scripts/start-opencode-observability-monitoring.sh`
 3. Read: [OBSERVABILITY-WORKFLOW.md](OBSERVABILITY-WORKFLOW.md)
 
 ### "I want to customize ocmonitor settings"
-1. Edit: `~/.myscripts/tmux/configs/ocmonitor.config.toml`
-2. Deploy: `~/.myscripts/tmux/scripts/deploy-ocmonitor-config.sh`
+1. Edit: `~/projetos/hub/portable-tmux/configs/ocmonitor.config.toml`
+2. Deploy: `~/projetos/hub/portable-tmux/scripts/deploy-ocmonitor-config.sh`
 3. Reference: [CROSS-REPO-CONFIG-LINKAGES.md § Configuration Deployment](CROSS-REPO-CONFIG-LINKAGES.md#data-flow)
 
 ### "I want to understand the architecture"
@@ -81,17 +81,17 @@ Quick reference for finding documentation across the myscripts repository. This 
 
 ### Configuration Files
 ```
-~/.myscripts/tmux/configs/ocmonitor.config.toml  # Edit here
-~/.myscripts/tmux/tmux/tmux.conf                 # Tmux config
+~/projetos/hub/portable-tmux/configs/ocmonitor.config.toml  # Edit here
+~/projetos/hub/portable-tmux/tmux/tmux.conf                 # Tmux config
 ~/.config/ocmonitor/config.toml                  # Symlink (deployed)
 ~/.config/opencode/opencode.json                 # OpenCode config (separate repo)
 ```
 
 ### Scripts
 ```
-~/.myscripts/tmux/scripts/deploy-ocmonitor-config.sh             # Deploy config
-~/.myscripts/tmux/scripts/start-opencode-observability-monitoring.sh  # Start monitoring
-~/.myscripts/tmux/scripts/link.sh                                # Link tmux configs
+~/projetos/hub/portable-tmux/scripts/deploy-ocmonitor-config.sh             # Deploy config
+~/projetos/hub/portable-tmux/scripts/start-opencode-observability-monitoring.sh  # Start monitoring
+~/projetos/hub/portable-tmux/scripts/link.sh                                # Link tmux configs
 ```
 
 ### Data
@@ -119,11 +119,11 @@ Quick reference for finding documentation across the myscripts repository. This 
 
 ```bash
 # Monitoring
-~/.myscripts/tmux/scripts/start-opencode-observability-monitoring.sh
+~/projetos/hub/portable-tmux/scripts/start-opencode-observability-monitoring.sh
 tmux attach -t opencode-observability-monitoring
 
 # Configuration
-~/.myscripts/tmux/scripts/deploy-ocmonitor-config.sh
+~/projetos/hub/portable-tmux/scripts/deploy-ocmonitor-config.sh
 
 # Sessions
 ocmonitor sessions

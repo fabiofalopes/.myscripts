@@ -36,7 +36,7 @@ When processing a full page, the model's attention and visual tokens are spread 
 
 **Approach**: Aggressive prompt engineering with explicit low-resolution handling
 
-**File**: `~/.myscripts/fabric-custom-patterns/ultra-ocr-engine/system.md`
+**File**: `~/projetos/hub/.myscripts/fabric-custom-patterns/ultra-ocr-engine/system.md`
 
 **Key Features**:
 - Multi-stage processing (visual analysis → extraction → reconstruction → confidence rating)
@@ -66,7 +66,7 @@ fabric -a low_res_doc.jpg -p ultra-ocr-engine
 
 **Approach**: Hierarchical extraction at multiple conceptual "zoom levels"
 
-**File**: `~/.myscripts/fabric-custom-patterns/multi-scale-ocr/system.md`
+**File**: `~/projetos/hub/.myscripts/fabric-custom-patterns/multi-scale-ocr/system.md`
 
 **Key Features**:
 - Processes at MACRO/MESO/MICRO/SUB-PIXEL levels
@@ -151,7 +151,7 @@ diff standard.txt ultra.txt
 - Implementation roadmap
 - Code snippets for future enhancements
 
-**Read it**: `cat ~/.myscripts/docs/OCR-Resolution-Challenge-Analysis.md`
+**Read it**: `cat ~/projetos/hub/.myscripts/docs/OCR-Resolution-Challenge-Analysis.md`
 
 ### 2. Pattern Specifications (9 KB)
 **Files**: 

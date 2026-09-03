@@ -111,7 +111,7 @@ tn note.md curl https://bad-url.com  # Error captured
 
 ```bash
 # 1. Make executable
-chmod +x ~/.myscripts/to_note
+chmod +x ~/projetos/hub/.myscripts/to_note
 
 # 2. Add to PATH
 export PATH="$PATH:$HOME/.myscripts"
@@ -132,7 +132,7 @@ tn "$OBSVAULT/test.md" echo "It works!"
 
 **"OBSVAULT not set"** - Add `export OBSVAULT=...` to your shell config
 
-**"Permission denied"** - Run `chmod +x ~/.myscripts/to_note`
+**"Permission denied"** - Run `chmod +x ~/projetos/hub/.myscripts/to_note`
 
 **"Command not found"** - Add `.myscripts` to your PATH
 

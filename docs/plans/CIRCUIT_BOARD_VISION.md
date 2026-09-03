@@ -186,7 +186,7 @@ System flags uncertain cases:
 
 ### Execution
 ```bash
-cd ~/.myscripts/circuit-board-knowledge-extractor
+cd ~/projetos/hub/circuit-extractor
 ./workflows/circuit-board-extractor.sh ~/Desktop/Salto\ encoder/
 ```
 
