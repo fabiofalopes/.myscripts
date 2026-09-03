@@ -19,6 +19,24 @@ export PATH=$PATH:/home/$USER/.myscripts
 
 ## Utility Scripts
 
+### Audio / Video Download
+- **`yta`** - Download audio from YouTube (or any yt-dlp-supported site)
+  - Thin wrapper around `yt-dlp` — extracts audio, converts to chosen format, embeds metadata
+  - Quick ref: `docs/yta-quickref.md`
+  ```bash
+  # Single video (default: mp3)
+  yta 'https://www.youtube.com/watch?v=K6ALVqwVF7k'
+
+  # opus = smallest/fastest (stream copy, no re-encode) — best for batch archiving
+  yta -f opus 'https://www.youtube.com/watch?v=K6ALVqwVF7k'
+
+  # Batch (multiple URLs at once)
+  yta -f opus -o ~/Music/podcasts url1 url2 url3
+
+  # Whole channel or playlist
+  yta -f opus -p -o ~/yt-audio/dwarkesh "https://www.youtube.com/@DwarkeshPatel/videos"
+  ```
+
 ### Media Conversion
 - **`flac2mp3.sh`** - Bulk convert FLAC audio files to MP3
 - **`heic2jpg.sh`** - Bulk convert HEIC images to JPG (ImageMagick/heif-convert)

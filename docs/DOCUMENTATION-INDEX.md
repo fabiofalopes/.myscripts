@@ -34,6 +34,11 @@ Quick reference for finding documentation across the myscripts repository. This 
 |----------|---------|--------------|
 | [CROSS-REPO-CONFIG-LINKAGES.md](CROSS-REPO-CONFIG-LINKAGES.md) | Cross-repo configuration architecture | Setup, migration, understanding system |
 
+### Audio / Video Download
+| Document | Purpose | When to Read |
+|----------|---------|--------------|
+| [yta-quickref.md](yta-quickref.md) | Download audio from YouTube/yt-dlp sites | Using `yta`, batch/channel downloads |
+
 ### Documentation Strategy
 | Document | Purpose | When to Read |
 |----------|---------|--------------|
@@ -59,6 +64,11 @@ Quick reference for finding documentation across the myscripts repository. This 
 
 ### "I want to set up a new machine"
 1. Follow: [CROSS-REPO-CONFIG-LINKAGES.md § Migration and Portability](CROSS-REPO-CONFIG-LINKAGES.md#migration-and-portability)
+
+### "I want to download audio from YouTube"
+1. Read: [yta-quickref.md](yta-quickref.md)
+2. Quick start: `yta -f opus -o ~/yt-audio 'https://youtube.com/watch?v=...'`
+3. Batch/channel: add `-p` and a playlist/channel URL
 
 ### "Something broke, help!"
 1. Check: [OBSERVABILITY-WORKFLOW.md § Troubleshooting](OBSERVABILITY-WORKFLOW.md#troubleshooting)
@@ -101,6 +111,7 @@ Quick reference for finding documentation across the myscripts repository. This 
 | tmux/docs/OPENCODE-OBSERVABILITY-DESIGN.md | Current | 2025-12-31 |
 | tmux/README.md | Current | - |
 | Documentation-Strategy-Framework.md | Reference | 2025-10-07 |
+| yta-quickref.md | Current | 2026-07-30 |
 
 ---
 
