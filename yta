@@ -1,0 +1,175 @@
+#!/bin/bash
+#
+# yta - Download audio from YouTube (or any yt-dlp supported site)
+#
+# PURPOSE:
+#   Thin wrapper around yt-dlp for grabbing just the audio track of a video.
+#   Extracts audio, converts to a chosen format, and drops it in an output
+#   directory with a clean filename. Works with YouTube and any other site
+#   yt-dlp supports (Vimeo, Twitter/X, SoundCloud, etc.).
+#
+# USAGE:
+#   yta [OPTIONS] <url> [url ...]
+#
+# OPTIONS:
+#   -f FMT    Audio format: mp3 opus m4a aac wav flac best (default: mp3)
+#   -o DIR    Output directory (default: ~/yt-audio)
+#   -c FILE   Cookies file, for age-gated / member / region-locked videos
+#   -p        Allow playlist download (default: single video only)
+#   -h        Show this help
+#
+# EXAMPLES:
+#   yta 'https://www.youtube.com/watch?v=K6ALVqwVF7k'
+#   yta -f opus 'https://www.youtube.com/watch?v=K6ALVqwVF7k'   # no re-encode
+#   yta -o ~/Music/podcasts 'https://youtu.be/abc123'
+#   yta -c cookies.txt 'https://www.youtube.com/watch?v=xyz'     # members only
+#   yta -p 'https://www.youtube.com/playlist?list=PLxxxx'        # whole playlist
+#   yta url1 url2 url3                                           # batch
+#
+# OUTPUT:
+#   Audio saved as <output_dir>/<video title>.<ext>
+#   Video metadata (title/artist/date) embedded in the file.
+#
+# DEPENDENCIES:
+#   - yt-dlp        (always required; keep it recent — YouTube changes weekly)
+#   - ffmpeg        (required for re-encoding: mp3 m4a aac wav flac)
+#   - JS runtime    (deno recommended, or node/bun — YouTube needs it to
+#                    descramble media URLs; without one downloads fail w/ 403)
+#
+# INSTALLATION:
+#   macOS:
+#     brew install yt-dlp ffmpeg deno
+#   Debian/Ubuntu:
+#     sudo apt install yt-dlp ffmpeg deno
+#
+# NOTES:
+#   - 'opus' and 'best' usually skip re-encoding (faster, lossless).
+#   - Without -p, a video URL that sits in a playlist downloads only that video.
+#   - For YouTube the script enables yt-dlp's EJS challenge solver, which pulls
+#     a small script from the official yt-dlp/ejs repo on first use (then cached).
+#   - YouTube breaking with 403? Update first:
+#       pip3 install -U --break-system-packages yt-dlp   (or: yt-dlp -U)
+#
+# VERSION: 1.0.0
+# AUTHOR:  Part of .myscripts collection
+#
+
+set -euo pipefail
+
+# Defaults
+FORMAT="mp3"
+OUTDIR="$HOME/yt-audio"
+COOKIES=""
+PLAYLIST="no"
+
+# Colors (auto-disable if not a terminal)
+if [[ -t 1 ]]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[0;33m'
+    BOLD='\033[1m'
+    NC='\033[0m'
+else
+    RED='' GREEN='' YELLOW='' BOLD='' NC=''
+fi
+
+usage() {
+    # Print the header comment block above as the help text (any length).
+    awk 'NR==1{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"
+    exit "${1:-0}"
+}
+
+die() {
+    echo -e "${RED}Error:${NC} $*" >&2
+    exit 1
+}
+
+# --- Dependency checks -------------------------------------------------------
+
+command -v yt-dlp >/dev/null 2>&1 || die "yt-dlp not found. Install: brew install yt-dlp  (or: sudo apt install yt-dlp)"
+
+needs_ffmpeg() {
+    case "$1" in
+        opus|best) return 1 ;;   # stream copy, no re-encode
+        *)         return 0 ;;
+    esac
+}
+
+if needs_ffmpeg "$FORMAT"; then
+    command -v ffmpeg >/dev/null 2>&1 || die "ffmpeg not found (needed for '$FORMAT'). Install: brew install ffmpeg  (or use -f opus)"
+fi
+
+# YouTube (and some other sites) need a JS runtime to descramble media URLs.
+# deno is yt-dlp's default; without any runtime you get HTTP 403 on download.
+if ! command -v deno >/dev/null 2>&1 && ! command -v node >/dev/null 2>&1 && ! command -v bun >/dev/null 2>&1; then
+    die "no JavaScript runtime found (deno/node/bun). YouTube needs one — install: brew install deno"
+fi
+
+# --- Parse options -----------------------------------------------------------
+
+URLS=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -f) FORMAT="${2:-}";  shift 2 ;;
+        -o) OUTDIR="${2:-}";  shift 2 ;;
+        -c) COOKIES="${2:-}"; shift 2 ;;
+        -p) PLAYLIST="yes";   shift ;;
+        -h|--help) usage 0 ;;
+        --) shift; while [[ $# -gt 0 ]]; do URLS+=("$1"); shift; done ;;
+        -*) die "Unknown option: $1 (see -h)" ;;
+        *)  URLS+=("$1"); shift ;;
+    esac
+done
+
+[[ ${#URLS[@]} -gt 0 ]] || { echo -e "${RED}Error:${NC} no URL given.\n"; usage 1; }
+[[ -n "$FORMAT" ]] || die "-f needs a value (mp3 opus m4a aac wav flac best)"
+[[ -n "$OUTDIR" ]] || die "-o needs a value"
+if [[ -n "$COOKIES" && ! -f "$COOKIES" ]]; then
+    die "cookies file not found: $COOKIES"
+fi
+
+mkdir -p "$OUTDIR"
+
+# --- Build the yt-dlp command ------------------------------------------------
+
+CMD=(yt-dlp
+    --extract-audio
+    --audio-format "$FORMAT"
+    --embed-metadata
+    --remote-components ejs:github
+    -o "$OUTDIR/%(title)s.%(ext)s"
+)
+
+if [[ "$PLAYLIST" == "yes" ]]; then
+    CMD+=(--yes-playlist)
+else
+    CMD+=(--no-playlist)
+fi
+
+[[ -n "$COOKIES" ]] && CMD+=(--cookies "$COOKIES")
+
+# --- Run ---------------------------------------------------------------------
+
+echo -e "${BOLD}Format:${NC} $FORMAT   ${BOLD}Output:${NC} $OUTDIR   ${BOLD}Videos:${NC} ${#URLS[@]}"
+
+fail=0
+for url in "${URLS[@]}"; do
+    echo -e "\n${GREEN}→${NC} $url"
+    # Marker lets us detect whether a file was actually written, since yt-dlp
+    # exits 0 even for empty playlists / geo-blocked / unrecognised URLs.
+    marker="$(mktemp)"
+    if "${CMD[@]}" "$url"; then
+        if [[ -n "$(find "$OUTDIR" -type f -newer "$marker" -print -quit 2>/dev/null)" ]]; then
+            echo -e "${GREEN}✓ done${NC}"
+        else
+            echo -e "${YELLOW}⚠ finished but saved no audio (bad URL? region-blocked? empty?): $url${NC}" >&2
+            fail=1
+        fi
+    else
+        echo -e "${RED}✗ failed:${NC} $url" >&2
+        fail=1
+    fi
+    rm -f "$marker"
+done
+
+exit "$fail"
